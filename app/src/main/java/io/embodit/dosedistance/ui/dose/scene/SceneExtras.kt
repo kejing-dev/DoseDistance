@@ -410,8 +410,11 @@ internal class DynMesh(private val host: Entity, private var material: Material,
     private var mesh: MeshResource? = null
     private var entity: Entity? = null
     private var on = true
+    private var destroyed = false
 
     fun set(builder: MeshBuilder?) {
+        // a rebuild still queued when its owner went away (a deleted shield's shadow) must not add an orphan entity
+        if (destroyed) return
         val next = builder?.build(name)
         runCatching { entity?.destroy(true) }
         entity = null
@@ -441,6 +444,7 @@ internal class DynMesh(private val host: Entity, private var material: Material,
     }
 
     fun destroy() {
+        destroyed = true
         runCatching { entity?.destroy(true) }
         entity = null
         mesh?.let { runCatching { it.close() } }

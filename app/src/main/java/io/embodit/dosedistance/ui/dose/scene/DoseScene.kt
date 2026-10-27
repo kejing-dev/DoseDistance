@@ -429,7 +429,10 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         // shields
         val ids = state.shields.map { it.id }.toSet()
         for (id in shieldViews.keys.filter { it !in ids }) shieldViews.remove(id)?.destroy()
-        for (id in shadowViews.keys.filter { it !in ids }) shadowViews.remove(id)?.destroy()
+        for (id in shadowViews.keys.filter { it !in ids }) {
+            shadowViews.remove(id)?.destroy()
+            meshWork.keys.removeAll { it.startsWith("shadow$id:") }
+        }
         for (s in state.shields) {
             if (s.id !in shieldViews) shieldViews[s.id] = ShieldView(root, s.id, meshes, m, pb)
             if (s.id !in shadowViews) shadowViews[s.id] = ShadowView(root, m, s.id)
@@ -555,7 +558,13 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
 
     /** At most [MESH_PER_FRAME] mesh creations per frame (a mesh waits for the render thread). */
     private fun runMeshWork(now: Long) {
-        // slow frames (idle emulator): one mesh every SLOW gap, else two per frame
+        // slow frames (idle emulator, 1 - 4 fps): one mesh every SLOW gap; middling frames (a loaded emulator, 7 - 25 fps):
+        // one per frame (the floor map's 8 meshes took 20 s through the slow gap at 12 fps); fast frames: two per frame
+        if (lastFrameDtMs in (FAST_FRAME_MS + 1)..MID_FRAME_MS) {
+            val key = meshWork.keys.firstOrNull() ?: return
+            meshWork.remove(key)?.let { w -> runCatching { w() }.onFailure { DdLog.w("MESH $key failed: $it") } }
+            return
+        }
         if (lastFrameDtMs !in 1..FAST_FRAME_MS) {
             if (meshWork.isEmpty() || now - lastSlowMeshMs < MESH_GAP_SLOW_MS) return
             lastSlowMeshMs = now
@@ -1242,6 +1251,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         const val LOG_MS = 5000L
         const val MESH_PER_FRAME = 2
         const val FAST_FRAME_MS = 40L
+        const val MID_FRAME_MS = 150L
         const val MESH_GAP_SLOW_MS = 2_500L
         const val ENTITY_GAP_SLOW_MS = 800L
     }

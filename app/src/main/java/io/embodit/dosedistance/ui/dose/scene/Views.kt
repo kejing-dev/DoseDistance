@@ -249,14 +249,15 @@ internal class RingsView(root: Entity, m: DdMaterials) {
 
 /**
  * The dose-rate floor map (v0.1.1, domain [Heat]): one see-through mesh per colour step, each a set of polar
- * cells around the source's foot, 1.5 mm off the floor (under the shadow and the rings).
+ * cells around the source's foot, 2.5 mm off the floor (under the shadow and the rings).
  */
 internal class HeatView(root: Entity, m: DdMaterials) {
     private val meshes = List(Heat.BINS) { DynMesh(root, m.heat[it], "heat:$it") }
 
     fun plan(cells: List<Heat.Cell>, center: P2, floorY: Float): List<Pair<String, () -> Unit>> {
         val byBin = cells.groupBy { it.bin }
-        val y = floorY + 0.0015f
+        // 2.5 mm: under the shadow (3 - 3.5 mm) and the rings (5 mm); 1.5 mm z-fought the emulator room's rug
+        val y = floorY + 0.0025f
         return List(Heat.BINS) { b ->
             val cs = byBin[b].orEmpty()
             "heat:$b" to {

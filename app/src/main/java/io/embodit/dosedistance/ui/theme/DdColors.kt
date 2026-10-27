@@ -47,11 +47,12 @@ object DdColors {
         }
 
     /**
-     * The floor map's colour for a level 0..1 (domain `Heat.level`, log 0.5 - 1000 µSv/h): the zone colours as
-     * a continuous ramp, passable green at 0.5, interaction yellow at 10, alert orange at 100, error red at 1000.
+     * The floor map's colour for a level 0..1 (domain `Heat.level`, log 0.5 - 1000 µSv/h): passable green at 0.5,
+     * interaction yellow at 10, error red at 100, source magenta at 1000. The zone's alert orange is left out: next
+     * to the yellow it was the same hue on the floor (emulator 2026-10-26), one colour per decade reads at a glance.
      */
     fun heat(level: Float): Color {
-        val stops = listOf(0f to Passable, Heat.level(10f) to Interaction, Heat.level(100f) to Alert, 1f to Error)
+        val stops = listOf(0f to Passable, Heat.level(10f) to Interaction, Heat.level(100f) to Error, 1f to SourceMagenta)
         val t = level.coerceIn(0f, 1f)
         for (i in 0 until stops.size - 1) {
             val (a, ca) = stops[i]

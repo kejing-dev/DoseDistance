@@ -131,7 +131,7 @@ or moved, and only snapped to one fixed place; show the dose rate as floor colou
   room and the reading, still listed); `shield_delete_N`. Works while you stand inside the shield.
 - **Floor map** (`Heat`, `HeatView`): polar grid around the source foot (22 log-spaced rings 0.10 - 4 m × 120 sectors),
   each cell coloured by the rate a head at your height reads there with the shields, 8 colour steps on log
-  0.5 - 1000 µSv/h (green -> yellow 10 -> orange 100 -> red 1000), 42 % see-through, 1.5 mm off the floor. Rebuilt with
+  0.5 - 1000 µSv/h (green -> yellow 10 -> red 100 -> magenta 1000: one hue per decade; the zone orange was indistinguishable from the yellow on the floor), 42 % see-through, 2.5 mm off the floor. Rebuilt with
   the rings (key change, ≤ 10 Hz, mesh queue). The zone bar on the dosimeter draws the same ramp and is labelled
   「地面」 as its legend. The shadow's green fill is off while the map is on (its dashed edge stays). Menu `menu_heat`.
 
