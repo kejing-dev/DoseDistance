@@ -23,6 +23,7 @@ import com.pico.spatial.core.math.Color4
 import com.pico.spatial.core.math.Vector2
 import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.core.math.Vector4
+import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.Vec3
 import io.embodit.dosedistance.domain.Zone
 import io.embodit.dosedistance.platform.DdLog
@@ -57,6 +58,14 @@ internal class DdMaterials(private val shared: SharedResources) {
     val spot: Material = unlit(DdColors.Interaction, twoSided = true)
     val follow: Material = sheer(DdColors.White, 0.5f)
     val stale: Material = sheer(DdColors.StaleGrey, 0.8f)
+
+    /** v0.1.1: faded looks of the shield while the user stands in it (taste profile D14: at most 30 %). */
+    val leadFaded: Material = sheer(DdColors.LeadGrey, 0.25f)
+    val baseFaded: Material = sheer(DdColors.BaseGrey, 0.25f)
+    val glassFaded: Material = sheer(DdColors.GlassBlue, 0.12f)
+
+    /** The floor map's colour steps (domain `Heat`), see-through so the real floor still shows. */
+    val heat: List<Material> = List(Heat.BINS) { sheer(DdColors.heat(Heat.binLevel(it)), HEAT_OPACITY) }
 
     /** Ring segment colours by zone (design `palette.brandTokens.zone*`); rings are opaque flat bands on the floor. */
     val zone: Map<Zone, Material> = Zone.entries.associateWith { sheer(DdColors.ofZone(it), 0.9f) }
@@ -108,6 +117,8 @@ internal class DdMaterials(private val shared: SharedResources) {
             .onFailure { DdLog.w("TEXTURE $name failed: $it") }
             .getOrNull()
 }
+
+private const val HEAT_OPACITY = 0.42f
 
 private fun Color.boost(k: Float): Color = Color(min(1f, red * k), min(1f, green * k), min(1f, blue * k), alpha)
 

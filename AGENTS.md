@@ -98,8 +98,8 @@ cam-coverage's ANR lesson).
 
 ## Panels (all SpatialUI inside PicoTheme; no Material)
 
-Pooled attachment panels, declared once with fixed slot sizes: `dosimeter` 400 × 444 and `compact` 400 × 120 at 0.75
-(lazy follow 28° left, 30° down, 0.6 m), `menu` 300 × 296 (above the dosimeter; Switch × 2, language segment, About,
+Pooled attachment panels, declared once with fixed slot sizes: `dosimeter` 400 × 500 (v0.1.1; 444 before) and `compact` 400 × 120 at 0.75
+(lazy follow 28° left, 30° down, 0.6 m), `menu` 300 × 388 (above the dosimeter; Switch × 4: Geiger, rings, floor map, snap; language segment, About,
 Clear all, Exit), `dialog` 400 × 300 (clear / unavailable / About, 0.8 m ahead), `snack` 360 × 56 (opaque hintInk,
 head follow 14° up), `coach` 360 × 160 (30 cm above the source, once), `result` 360 × 220 (opaque hintInk, 0.8 m,
 12° below the gaze), plates 240 × 40 (`plateSource` 12 cm above the pot, `plateShield1/2` at the window's lower edge on
@@ -108,6 +108,42 @@ footer 「教学近似，非剂量评估」 is always on the dosimeter. Copy in 
 `rs()` so the in-app language switch works without a restart. Fonts: Noto Sans + Noto Sans SC subset (294 chars;
 re-run `python tools/subset_cjk_font.py --source ../fire-plan/app/src/main/res/font/noto_sans_sc.ttf` after
 changing zh copy).
+
+## v0.1.1 polish (2026-10-26, user feedback on the headset; taste profile D14 / D15)
+
+User: the Geiger was too loud and could not be muted; the lead shield landed on their face, could not be seen past
+or moved, and only snapped to one fixed place; show the dose rate as floor colour. Changes:
+
+- **Mute** (`mute` key beside the Geiger icon on the dosimeter; `Settings.geiger`, remembered). Sound synthesis moved
+  to `platform/audio/GeigerSynth.kt` (plain Kotlin): soft 3 ms 2.2 kHz ticks, peak 0.22 (was 0.6 noise bursts); above
+  400 µSv/h a 120 ms 880 Hz pip every 1.2 s instead of the continuous 1.8 kHz tone. `PolishTest.geigerIsQuiet`
+  renders `app/build/geiger-{10,93,alarm}.wav`: peaks 0.15 / 0.15 / 0.21, rms 0.003 / 0.008 / 0.018 (v0.1.0's tone
+  rms 0.127).
+- **Clearance** (`domain/Placement.kt`): no shield lands within 0.8 m of the head on the floor (tap, gaze ghost,
+  drag, debug `shield`), the floor source within 0.6 m; pushed out along head -> point. The snap point
+  (`Snap.point`) is at most 0.5 m from the source and 0.8 m from you (drill 3: the source - spot midpoint, 0.8 m
+  from the spot; spot now 1.3 - 2.5 m); none when you stand within ~1.1 m of the source. Snap can be turned off
+  (menu `menu_snap`).
+- **Fade**: head within 0.4 m of a shield's panel on the floor (out above 0.45) -> lead, window, base and posts at
+  25 % / 12 % (`ShieldView.fade`, log `SHIELD fade`).
+- **Shield list** on the shield page (dosimeter 400 × 500 now, content 200): one row per shield, name = select,
+  `shield_front_N` = 1.2 m ahead of the head along its level heading, facing you; `shield_hide_N` (hidden = out of the
+  room and the reading, still listed); `shield_delete_N`. Works while you stand inside the shield.
+- **Floor map** (`Heat`, `HeatView`): polar grid around the source foot (22 log-spaced rings 0.10 - 4 m × 120 sectors),
+  each cell coloured by the rate a head at your height reads there with the shields, 8 colour steps on log
+  0.5 - 1000 µSv/h (green -> yellow 10 -> orange 100 -> red 1000), 42 % see-through, 1.5 mm off the floor. Rebuilt with
+  the rings (key change, ≤ 10 Hz, mesh queue). The zone bar on the dosimeter draws the same ramp and is labelled
+  「地面」 as its legend. The shadow's green fill is off while the map is on (its dashed edge stays). Menu `menu_heat`.
+
+Debug (v0.1.1): `front --ei n 1` · `hide --ei n 1 --ei on 1|0` · `inside --ei n 1` (shield n 15 cm in front of the
+real eyes, debug head off: the view from inside a shield) · `sound|heat|snap --ei on 1|0` · `fade` (see-through ids).
+New control names: `mute menu_heat menu_snap shield_item_N shield_front_N shield_hide_N shield_delete_N heat_legend`.
+Shield standard scenes inject the head 1.5 m from the source (S17: 1.3 m, the spot) so the shields keep the clearance;
+S09 / S10 put the slanted shield at (0.8, 0.9) and S24's second at (0.6, 0.9). The `STATE` line ends with
+`sound= heat= snap=`; hidden shields show ` hidden`.
+
+Cross-machine install: v0.1.0 on the headset was signed with the home PC's debug key. Back up
+`shared_prefs/dose_distance.xml` with `run-as`, uninstall, install, restore (Git Bash: `MSYS_NO_PATHCONV=1`).
 
 ## Debug commands (debug build only)
 

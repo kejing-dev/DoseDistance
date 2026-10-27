@@ -129,9 +129,10 @@ data class SourceFrame(val origin: Vec3, val ex: P2) {
 
 /**
  * A mobile lead shield standing on the floor (design `entities3d.shield`): centre (x, z) in Stage metres,
- * facing angle (degrees; facing = (cos, sin) on the floor) and nominal thickness in mm.
+ * facing angle (degrees; facing = (cos, sin) on the floor) and nominal thickness in mm. [hidden] (v0.1.1,
+ * the dosimeter's shield list): kept in the list but out of the room and out of the reading.
  */
-data class Shield(val id: Int, val x: Float, val z: Float, val faceDeg: Float, val tMm: Int) {
+data class Shield(val id: Int, val x: Float, val z: Float, val faceDeg: Float, val tMm: Int, val hidden: Boolean = false) {
     val center: P2
         get() = P2(x, z)
 
@@ -202,7 +203,7 @@ data class Reading(
         fun at(iso: Isotope, core: Vec3, head: Vec3, shields: List<Shield>, floorY: Float): Reading {
             val crossed = HashSet<Int>()
             var a = 1f
-            for (s in shields) if (s.crosses(core, head, floorY)) {
+            for (s in shields) if (!s.hidden && s.crosses(core, head, floorY)) {
                 crossed += s.id
                 a *= Dose.factor(iso, s.tMm)
             }
@@ -311,7 +312,8 @@ object Drills {
     const val READ_MAX_D = 0.8f
     const val TIME_LIMIT_MS = 60_000L
     const val SPOT_R = 0.3f
-    const val SPOT_MIN = 1.0f
+    // 1.3 m (v0.1.1, was 1.0): the snap point between the source and the spot stays 0.8 m clear of the user
+    const val SPOT_MIN = 1.3f
     const val SPOT_MAX = 2.5f
     const val OUT_MS = 500L
     const val PASS_A = 0.1275f
@@ -332,7 +334,7 @@ object Drills {
 
     fun shieldPasses(a: Float): Boolean = a <= PASS_A
 
-    /** Drill 3 spot: the head's floor point pulled into 1.0 .. 2.5 m of the source. Second = was pulled in from afar. */
+    /** Drill 3 spot: the head's floor point pulled into 1.3 .. 2.5 m of the source. Second = was pulled in from afar. */
     fun spot(source: P2, head: P2, fallbackDir: P2): Pair<P2, Boolean> {
         val d = head - source
         val r = d.length

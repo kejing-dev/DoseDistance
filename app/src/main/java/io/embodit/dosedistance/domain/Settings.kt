@@ -18,6 +18,9 @@ data class Settings(
     val thickness: Int = Dose.DEFAULT_T,
     val geiger: Boolean = true,
     val rings: Boolean = true,
+    /** v0.1.1: the dose-rate floor map, and the shield's snap to its suggested point (an aid that can be turned off). */
+    val heat: Boolean = true,
+    val snap: Boolean = true,
     val language: Language = Language.ZH,
     val coachSeen: Boolean = false,
 )

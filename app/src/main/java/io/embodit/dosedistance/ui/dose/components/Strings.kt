@@ -66,11 +66,13 @@ fun oneDecimal(v: Float): String = String.format(Locale.US, "%.1f", v)
 /** Panel sizes (design-package `panels[].sizeDp`), in dp. */
 object PanelSizes {
     const val DOSIMETER_W = 400f
-    const val DOSIMETER_H = 444f
+    // v0.1.1: 444 -> 500, the shield page lists the placed shields
+    const val DOSIMETER_H = 500f
     const val COMPACT_H = 120f
     const val INNER_W = 368f
     const val MENU_W = 300f
-    const val MENU_H = 296f
+    // v0.1.1: 296 -> 388, floor map and shield snap switches
+    const val MENU_H = 388f
     const val DIALOG_W = 400f
     const val DIALOG_H = 300f
     const val SNACK_W = 360f
@@ -81,7 +83,7 @@ object PanelSizes {
     const val RESULT_H = 220f
     const val PLATE_W = 240f
     const val PLATE_H = 40f
-    const val CONTENT_H = 144f
+    const val CONTENT_H = 200f
 
     /** Disabled content (SpatialUI's own disabled alpha). */
     const val DISABLED_ALPHA = 0.38f

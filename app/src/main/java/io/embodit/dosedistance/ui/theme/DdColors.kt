@@ -6,6 +6,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import com.pico.spatial.ui.design.PicoTheme
+import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.Zone
 
 /**
@@ -44,6 +45,24 @@ object DdColors {
             Zone.HIGH -> Alert
             Zone.EXTREME -> Error
         }
+
+    /**
+     * The floor map's colour for a level 0..1 (domain `Heat.level`, log 0.5 - 1000 µSv/h): the zone colours as
+     * a continuous ramp, passable green at 0.5, interaction yellow at 10, alert orange at 100, error red at 1000.
+     */
+    fun heat(level: Float): Color {
+        val stops = listOf(0f to Passable, Heat.level(10f) to Interaction, Heat.level(100f) to Alert, 1f to Error)
+        val t = level.coerceIn(0f, 1f)
+        for (i in 0 until stops.size - 1) {
+            val (a, ca) = stops[i]
+            val (b, cb) = stops[i + 1]
+            if (t <= b) {
+                val k = if (b > a) (t - a) / (b - a) else 0f
+                return Color(ca.red + (cb.red - ca.red) * k, ca.green + (cb.green - ca.green) * k, ca.blue + (cb.blue - ca.blue) * k, 1f)
+            }
+        }
+        return Error
+    }
 }
 
 /** Type roles of the design (`typography.roles`): tabular figures everywhere a number is shown. */

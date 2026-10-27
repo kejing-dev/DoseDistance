@@ -23,6 +23,8 @@ class PrefsSettingsStore(context: Context) : SettingsStore {
             thickness = prefs.getInt("t", Dose.DEFAULT_T).takeIf { it in Dose.THICKNESSES } ?: Dose.DEFAULT_T,
             geiger = prefs.getBoolean("geiger", true),
             rings = prefs.getBoolean("rings", true),
+            heat = prefs.getBoolean("heat", true),
+            snap = prefs.getBoolean("snap", true),
             language = Language.byTag(prefs.getString("lang", null)) ?: Language.ofSystem(Locale.getDefault().toLanguageTag()),
             coachSeen = prefs.getBoolean("coach", false),
         )
@@ -33,6 +35,8 @@ class PrefsSettingsStore(context: Context) : SettingsStore {
             .putInt("t", settings.thickness)
             .putBoolean("geiger", settings.geiger)
             .putBoolean("rings", settings.rings)
+            .putBoolean("heat", settings.heat)
+            .putBoolean("snap", settings.snap)
             .putString("lang", settings.language.tag)
             .putBoolean("coach", settings.coachSeen)
             .apply()

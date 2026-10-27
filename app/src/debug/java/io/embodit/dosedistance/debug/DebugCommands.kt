@@ -39,6 +39,11 @@ import java.util.Locale
  * `drill` id=distance|time|shield do=start|pass|fail|code|read · `dose` cum · `drag_pose` what=source|shield on=1|0 ·
  * `lost` [on=0] · `coach_reset` · `state` · `aim` x z | v=off · `stick` a=x,ms · `select` what=source|shield [n] ·
  * `tap` · `ui` s=control · `snack` v=long|normal · `dump` · `pose` · `panels` · `planes` · `bounds` · `hidemode` s=auto|park
+ *
+ * v0.1.1: `front` n (bring shield n in front of the head) · `hide` n [on=1|0] · `inside` n (shield n stands on the
+ * real head's floor point, debug head off: the view from inside the shield, fade check) · `sound` on=1|0 ·
+ * `heat` on=1|0 · `snap` on=1|0 · `fade` (which shields are see-through). Shield standard scenes put the head
+ * 1.5 m from the source so that every shield keeps the 0.8 m clearance.
  */
 internal object DebugCommands {
     private val main = Handler(Looper.getMainLooper())
@@ -114,6 +119,33 @@ internal object DebugCommands {
                 val nums = (t["a"] ?: "").split(',').mapNotNull { it.trim().toFloatOrNull() }
                 CmdOut.log(scene.debugStick(nums.getOrNull(0) ?: f["x"] ?: 0f, (nums.getOrNull(1) ?: 1000f).toLong()))
             }
+            "front" -> {
+                val n = i["n"] ?: 1
+                syncHead(vm)
+                CmdOut.log("front n=$n -> ${vm.shieldToFront(n)}")
+            }
+            "hide" -> {
+                val n = i["n"] ?: 1
+                vm.onEvent(DoseEvent.ShieldHidden(n, (i["on"] ?: 1) != 0))
+                CmdOut.log("hide n=$n on=${i["on"] ?: 1}")
+            }
+            "inside" -> {
+                val n = i["n"] ?: 1
+                DdGraph.debugHead = null
+                DdGraph.debugPitchDeg = null
+                val pose = scene.headPose()
+                if (pose == null) CmdOut.log("inside: no head") else {
+                    val f = pose.level()
+                    // the panel 15 cm ahead of the eyes, facing them: what "walked into the shield" looks like
+                    val at = P2(pose.position.x + f.x * 0.15f, pose.position.z + f.z * 0.15f)
+                    vm.debugSet { st -> st.copy(shields = st.shields.map { if (it.id == n) it.copy(x = at.x, z = at.z, faceDeg = io.embodit.dosedistance.domain.Shield.faceTowards(at, P2(pose.position.x, pose.position.z)), hidden = false) else it }) }
+                    CmdOut.log("inside n=$n at=$at")
+                }
+            }
+            "sound" -> vm.onEvent(DoseEvent.GeigerSet((i["on"] ?: 1) != 0))
+            "heat" -> vm.onEvent(DoseEvent.HeatSet((i["on"] ?: 1) != 0))
+            "snap" -> vm.onEvent(DoseEvent.SnapSet((i["on"] ?: 1) != 0))
+            "fade" -> CmdOut.log("fade ${scene.fadedShieldIds()}")
             "select" -> if ((t["what"] ?: v) == "source") vm.onEvent(DoseEvent.SourceTapped) else vm.onEvent(DoseEvent.ShieldTapped(i["n"] ?: 1))
             "tap" -> vm.onEvent(DoseEvent.EmptyTapped)
             "ui" -> ui(vm, s ?: "")
@@ -147,7 +179,10 @@ internal object DebugCommands {
                 "place_source" -> DoseEvent.PlaceSourceClicked
                 "remove_source" -> DoseEvent.RemoveSourceClicked
                 "place_shield" -> DoseEvent.PlaceShieldClicked
-                "delete_shield" -> DoseEvent.DeleteShieldClicked
+                "delete_shield" -> DoseEvent.DeleteShield(null)
+                "mute" -> DoseEvent.GeigerSet(!vm.state.value.settings.geiger)
+                "menu_heat" -> DoseEvent.HeatSet(!vm.state.value.settings.heat)
+                "menu_snap" -> DoseEvent.SnapSet(!vm.state.value.settings.snap)
                 "thickness_minus" -> DoseEvent.ThicknessStep(-1)
                 "thickness_plus" -> DoseEvent.ThicknessStep(1)
                 "reset" -> DoseEvent.ResetCumulative
@@ -172,12 +207,33 @@ internal object DebugCommands {
                 "blocked_exit" -> DoseEvent.BlockedExit
                 "blocked_retry" -> DoseEvent.BlockedRetry
                 "coach_ok" -> DoseEvent.CoachDismissed
-                else -> null
+                else -> shieldControl(name)
             }
         if (e == null) DdLog.w("CMD ui unknown '$name'") else {
             vm.onEvent(e)
             CmdOut.log("ui $name")
         }
+    }
+
+    /** `shield_item_N` / `shield_front_N` / `shield_hide_N` / `shield_delete_N` (the shield list). */
+    private fun shieldControl(name: String): DoseEvent? {
+        val n = name.substringAfterLast('_').toIntOrNull() ?: return null
+        val st = Probe.host?.viewModel()?.state?.value ?: return null
+        return when {
+            name.startsWith("shield_item_") -> DoseEvent.ShieldListTapped(n)
+            name.startsWith("shield_front_") -> DoseEvent.ShieldToFront(n)
+            name.startsWith("shield_hide_") -> DoseEvent.ShieldHidden(n, st.shields.firstOrNull { it.id == n }?.hidden != true)
+            name.startsWith("shield_delete_") -> DoseEvent.DeleteShield(n)
+            else -> null
+        }
+    }
+
+    /** The ViewModel learns the head 10 times a second: an injected head is handed over at once before a placement. */
+    private fun syncHead(vm: DoseViewModel) {
+        val src = vm.state.value.source ?: return
+        val rel = DdGraph.debugHead ?: return
+        val h = src.frame.world(rel.x, rel.y, rel.z)
+        vm.debugSet { it.copy(head = h, heading = P2(src.x - h.x, src.z - h.z).normalized()) }
     }
 
     /** Back to an empty, ready room (keeps the planes and the preferences). */
@@ -206,7 +262,7 @@ internal object DebugCommands {
                 aboutDialog = false,
                 snack = null,
                 coach = false,
-                settings = it.settings.copy(isotope = Isotope.CS137, thickness = Dose.DEFAULT_T, coachSeen = true, rings = true),
+                settings = it.settings.copy(isotope = Isotope.CS137, thickness = Dose.DEFAULT_T, coachSeen = true, rings = true, heat = true, snap = true),
             )
         }
     }
@@ -233,6 +289,7 @@ internal object DebugCommands {
 
     private fun shield(vm: DoseViewModel, n: Int, x: Float, z: Float, yaw: Float, t: Int?): String {
         val src = vm.state.value.source ?: return "shield: no source"
+        syncHead(vm)
         val p = src.frame.floorPoint(x, z)
         vm.releaseShield(n, p, src.frame.worldFace(yaw), t)
         val s = vm.state.value.shields.firstOrNull { it.id == n }
@@ -315,27 +372,27 @@ internal object DebugCommands {
                     vm.onEvent(DoseEvent.PlaceShieldClicked)
                     DdGraph.debugAim = 0.6f to 0f
                 }
-                "S09" -> standard().also {
-                    shield(vm, 1, 1.2f, 0.6f, 30f, 6)
+                "S09" -> standard(1.5f).also {
+                    shield(vm, 1, 0.8f, 0.9f, 30f, 6)
                     vm.debugSet { st -> st.copy(dragging = DragWhat.ShieldOf(1), selectedShield = 1, tab = Tab.SHIELD) }
                 }
-                "S10" -> standard().also { shield(vm, 1, 1.2f, 0.6f, 30f, 6) }
-                "S11" -> standard().also { shield(vm, 1, 0.55f, 0.05f, 170f, 6) }
-                "S12" -> standard().also {
+                "S10" -> standard(1.5f).also { shield(vm, 1, 0.8f, 0.9f, 30f, 6) }
+                "S11" -> standard(1.5f).also { shield(vm, 1, 0.55f, 0.05f, 170f, 6) }
+                "S12" -> standard(1.5f).also {
                     shield(vm, 1, 0.55f, 0.05f, 170f, 6)
                     vm.onEvent(DoseEvent.ShieldTapped(1))
                     if (v == "24") vm.debugSet { st -> st.copy(shields = st.shields.map { it.copy(tMm = 24) }) }
                 }
                 "S13" -> when (v) {
-                    "two" -> standard().also {
+                    "two" -> standard(1.5f).also {
                         shield(vm, 1, 0.5f, 0f, 180f, 12)
                         shield(vm, 2, 0.7f, 0f, 180f, 12)
                         vm.debugSet { it.copy(snack = null) }
                     }
                     "out" -> standard(0.6f, 0.85f, 0.8f).also { shield(vm, 1, 0.5f, 0f, 180f, 6); vm.debugSet { it.copy(snack = null) } }
-                    else -> standard().also { shield(vm, 1, 0.5f, 0f, 180f, 6); vm.debugSet { it.copy(snack = null) } }
+                    else -> standard(1.5f).also { shield(vm, 1, 0.5f, 0f, 180f, 6); vm.debugSet { it.copy(snack = null) } }
                 }
-                "S14" -> standard().also {
+                "S14" -> standard(1.5f).also {
                     shield(vm, 1, 0.5f, 0f, 180f, 6)
                     vm.debugSet { it.copy(snack = null) }
                     later(400) {
@@ -355,11 +412,11 @@ internal object DebugCommands {
                         if (v == "out") later(300) { head(1.6f, 0.85f, 0f) }
                     }
                 }
-                "S17" -> standard().also {
+                "S17" -> standard(1.3f).also {
                     later(400) {
                         vm.onEvent(DoseEvent.DrillStart(DrillKind.SHIELD))
-                        shield(vm, 1, 0.5f, 0f, 180f, 12)
-                        shield(vm, 2, 0.7f, 0f, 180f, 12)
+                        shield(vm, 1, 0.35f, 0f, 180f, 12)
+                        shield(vm, 2, 0.5f, 0f, 180f, 12)
                         later(300) { drill(vm, null, "pass") }
                     }
                 }
@@ -383,16 +440,19 @@ internal object DebugCommands {
                 }
                 "S22" -> standard().also { vm.onEvent(DoseEvent.MoreClicked) }
                 "S23" -> standard().also { vm.onEvent(DoseEvent.ClearAllClicked) }
-                "S24" -> standard().also {
+                "S24" -> standard(1.5f).also {
                     shield(vm, 1, 0.5f, 0f, 180f, 6)
-                    shield(vm, 2, 1.2f, 0.6f, 30f, 6)
+                    shield(vm, 2, 0.6f, 0.9f, 30f, 6)
                     vm.onEvent(DoseEvent.TabSelected(Tab.SHIELD))
                     vm.onEvent(DoseEvent.PlaceShieldClicked)
                 }
                 "S25" -> standard().also { vm.onEvent(DoseEvent.AboutClicked) }
                 "S26" -> standard().also {
                     vm.debugSet { it.copy(settings = it.settings.copy(isotope = if (v == "tc") Isotope.TC99M else Isotope.CO60)) }
-                    if (v == "shield") shield(vm, 1, 0.5f, 0f, 180f, 6)
+                    if (v == "shield") {
+                        head(1.5f, 0.85f, 0f)
+                        shield(vm, 1, 0.5f, 0f, 180f, 6)
+                    }
                 }
                 "RELEASE" -> {
                     vm.debugHoldScanning = false

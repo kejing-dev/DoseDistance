@@ -3,6 +3,7 @@ package io.embodit.dosedistance.ui.dose.scene
 import com.pico.spatial.core.ecs.Entity
 import com.pico.spatial.core.ecs.InteractableComponent
 import com.pico.spatial.core.ecs.resource.Material
+import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.P2
 import io.embodit.dosedistance.domain.Quat4
 import io.embodit.dosedistance.domain.Rings
@@ -97,12 +98,15 @@ internal class SourceView(root: Entity, private val meshes: DdMeshes, private va
 /**
  * A mobile lead shield (design `entities3d.shield`): 0.60 x 1.80 m panel (lead 0.05 - 1.20, lead glass
  * window 1.20 - 1.85) on a 0.60 x 0.05 x 0.40 base with two posts; the panel is drawn at least 10 mm thick.
- * Local +Z is the facing; local +X the lateral axis.
+ * Local +Z is the facing; local +X the lateral axis. v0.1.1: [fade] turns it see-through (25 %) while the user
+ * stands in or right at it (taste profile D14).
  */
 internal class ShieldView(private val root: Entity, val id: Int, meshes: DdMeshes, private val m: DdMaterials, pb: Material?) {
     val holder: Entity = Entity()
     private val lead: Part
     private val window: Part
+    private val greyParts = ArrayList<Part>()
+    private var faded = false
     private val overlay: Part
     private val pbPatch: Part?
     private val panelFrame = Frame(root, meshes.band, m.selected, "shield$id:selPanel")
@@ -118,10 +122,10 @@ internal class ShieldView(private val root: Entity, val id: Int, meshes: DdMeshe
         val body = Entity()
         holder.addChild(body)
         body.setLocal(position = Vec3(0f, -0.93f, 0f))
-        Part(body, meshes.cube, m.base, "shield$id:base").place(Vec3(0f, 0.025f, 0f), Vec3(Shield.WIDTH, 0.05f, Shield.BASE_D))
+        greyParts += Part(body, meshes.cube, m.base, "shield$id:base").also { it.place(Vec3(0f, 0.025f, 0f), Vec3(Shield.WIDTH, 0.05f, Shield.BASE_D)) }
         lead = Part(body, meshes.cube, m.lead, "shield$id:lead")
         window = Part(body, meshes.cube, m.glass, "shield$id:window")
-        for (sx in listOf(-1f, 1f)) Part(body, meshes.cylinder, m.base, "shield$id:post").place(Vec3(sx * (Shield.HALF_W + 0.01f), 0.95f, 0f), Vec3(0.02f, 1.80f, 0.02f))
+        for (sx in listOf(-1f, 1f)) greyParts += Part(body, meshes.cylinder, m.base, "shield$id:post").also { it.place(Vec3(sx * (Shield.HALF_W + 0.01f), 0.95f, 0f), Vec3(0.02f, 1.80f, 0.02f)) }
         overlay = Part(body, meshes.cube, m.shieldedOverlay, "shield$id:overlay")
         pbPatch = pb?.let { Part(body, meshes.quad, it, "shield$id:pb") }
         thickness(6)
@@ -165,8 +169,19 @@ internal class ShieldView(private val root: Entity, val id: Int, meshes: DdMeshe
         baseFrame.draw(c + Vec3(0f, 0.004f, 0f), lat, n, Shield.HALF_W + 0.03f, Shield.BASE_D / 2f + 0.03f, 0.014f, Vec3.UP)
     }
 
+    /** See-through while the user stands in / right at the shield (the view is never filled by a grey wall). */
+    fun fade(on: Boolean) {
+        if (on == faded) return
+        faded = on
+        lead.material(if (on) m.leadFaded else m.lead)
+        window.material(if (on) m.glassFaded else m.glass)
+        greyParts.forEach { it.material(if (on) m.baseFaded else m.base) }
+        pbPatch?.show(!on)
+        if (on) overlay.show(false)
+    }
+
     fun look(selected: Boolean, shielding: Boolean) {
-        overlay.show(shielding)
+        overlay.show(shielding && !faded)
         if (selected != selectedNow) {
             selectedNow = selected
             frames()
@@ -232,6 +247,40 @@ internal class RingsView(root: Entity, m: DdMaterials) {
     }
 }
 
+/**
+ * The dose-rate floor map (v0.1.1, domain [Heat]): one see-through mesh per colour step, each a set of polar
+ * cells around the source's foot, 1.5 mm off the floor (under the shadow and the rings).
+ */
+internal class HeatView(root: Entity, m: DdMaterials) {
+    private val meshes = List(Heat.BINS) { DynMesh(root, m.heat[it], "heat:$it") }
+
+    fun plan(cells: List<Heat.Cell>, center: P2, floorY: Float): List<Pair<String, () -> Unit>> {
+        val byBin = cells.groupBy { it.bin }
+        val y = floorY + 0.0015f
+        return List(Heat.BINS) { b ->
+            val cs = byBin[b].orEmpty()
+            "heat:$b" to {
+                val mb = MeshBuilder()
+                for (c in cs) {
+                    val r0 = Heat.radius(c.ring)
+                    val r1 = Heat.radius(c.ring + 1)
+                    val a0 = Heat.angle(c.sector)
+                    val a1 = Heat.angle(c.sector + 1)
+                    fun p(r: Float, a: Double) = Vec3(center.x + (cos(a) * r).toFloat(), y, center.z + (sin(a) * r).toFloat())
+                    mb.quad(p(r0, a0), p(r1, a0), p(r1, a1), p(r0, a1))
+                }
+                meshes[b].set(if (mb.isEmpty) null else mb)
+            }
+        }
+    }
+
+    fun show(visible: Boolean) = meshes.forEach { it.show(visible) }
+
+    fun clearPlan(): List<Pair<String, () -> Unit>> = List(Heat.BINS) { b -> "heat:$b" to { meshes[b].set(null) } }
+
+    fun destroy() = meshes.forEach { it.destroy() }
+}
+
 /** The safe shadow of one shield (design `entities3d.shadow`): passable 22 % fill + 1 cm dashed edge 60 %, 3 mm off the floor. */
 internal class ShadowView(root: Entity, m: DdMaterials, id: Int) {
     private val fill = DynMesh(root, m.shadowFill, "shadow$id:fill")
@@ -265,8 +314,12 @@ internal class ShadowView(root: Entity, m: DdMaterials, id: Int) {
             },
         )
 
-    fun show(visible: Boolean) {
-        fill.show(visible)
+    private var fillOn = true
+
+    /** [withFill] = false while the floor map is on: the map shows the shadow itself, the dashed edge stays. */
+    fun show(visible: Boolean, withFill: Boolean = fillOn) {
+        fillOn = withFill
+        fill.show(visible && withFill)
         edge.show(visible)
     }
 

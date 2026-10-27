@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.embodit.dosedistance.data.PrefsSettingsStore
 import io.embodit.dosedistance.data.SettingsStore
+import io.embodit.dosedistance.domain.Clearance
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.Drills
 import io.embodit.dosedistance.domain.Isotope
@@ -85,7 +86,10 @@ class DoseViewModel(
             DoseEvent.PlaceSourceClicked -> onPlaceSource()
             DoseEvent.RemoveSourceClicked -> if (!s.drillRunning && s.source != null) removeSource()
             DoseEvent.PlaceShieldClicked -> onPlaceShield()
-            DoseEvent.DeleteShieldClicked -> onDeleteShield()
+            is DoseEvent.DeleteShield -> onDeleteShield(e.id ?: s.selectedShield)
+            is DoseEvent.ShieldToFront -> shieldToFront(e.id)
+            is DoseEvent.ShieldHidden -> onShieldHidden(e.id, e.hidden)
+            is DoseEvent.ShieldListTapped -> onShieldListTapped(e.id)
             is DoseEvent.ThicknessStep -> onThickness(e.step)
             DoseEvent.ResetCumulative -> if (!s.drillRunning) update { it.copy(cumulative = 0f) }
             is DoseEvent.DrillStart -> startDrill(e.kind)
@@ -96,6 +100,8 @@ class DoseViewModel(
             DoseEvent.MoreClicked -> if (s.ready) update { it.copy(menuOpen = !it.menuOpen) }
             is DoseEvent.GeigerSet -> saveSettings { it.copy(geiger = e.on) }
             is DoseEvent.RingsSet -> saveSettings { it.copy(rings = e.on) }
+            is DoseEvent.HeatSet -> saveSettings { it.copy(heat = e.on) }
+            is DoseEvent.SnapSet -> saveSettings { it.copy(snap = e.on) }
             is DoseEvent.LanguageSelected -> saveSettings { it.copy(language = e.language) }
             DoseEvent.AboutClicked -> update { it.copy(menuOpen = false, aboutDialog = true) }
             DoseEvent.ClearAllClicked -> if (!s.drillRunning) update { it.copy(menuOpen = false, clearDialog = true) }
@@ -165,7 +171,7 @@ class DoseViewModel(
         val dt = if (lastTickMs < 0) 0L else (e.nowMs - lastTickMs).coerceIn(0L, 500L)
         lastTickMs = e.nowMs
         if (s.trackingLost) {
-            update { it.copy(head = e.head ?: it.head) }
+            update { it.copy(head = e.head ?: it.head, heading = e.heading ?: it.heading) }
             return
         }
         val dose = if (e.reading != null) e.dDose else 0f
@@ -173,7 +179,7 @@ class DoseViewModel(
         if (drill != null && drill.running && e.reading != null && s.source != null) drill = stepDrill(drill, s, e, dt, dose)
         val passedNow = drill?.phase == DrillPhase.PASSED && s.drill?.phase == DrillPhase.RUNNING
         val failedNow = drill?.phase == DrillPhase.FAILED && s.drill?.phase == DrillPhase.RUNNING
-        update { it.copy(reading = e.reading, cumulative = it.cumulative + dose, head = e.head ?: it.head, clicks = e.clicks, drill = drill) }
+        update { it.copy(reading = e.reading, cumulative = it.cumulative + dose, head = e.head ?: it.head, heading = e.heading ?: it.heading, clicks = e.clicks, drill = drill) }
         if (passedNow) {
             DdLog.i("DRILL pass kind=${drill!!.kind.tag} s=${drill.elapsedMs / 1000} cum=${fmt(drill.cum)} h=${fmt(drill.resultH)} a=${fmt(drill.resultA)}")
             _effects.tryEmit(DoseEffect.Feedback("snap"))
@@ -238,7 +244,7 @@ class DoseViewModel(
                     DrillUi(kind, dStart = d0, hStart = h0, target = target, toGo = Drills.toGo(d0, head.y - core.y, P2(head.x - core.x, head.z - core.z).length))
                 }
                 DrillKind.TIME -> {
-                    val h = Reading.at(s.isotope, core, head, s.shields, floorY).h
+                    val h = Reading.at(s.isotope, core, head, s.visibleShields, floorY).h
                     DrillUi(kind, hStart = h, code = String.format(Locale.US, "%03d", Random.nextInt(100, 1000)))
                 }
                 DrillKind.SHIELD -> {
@@ -344,7 +350,9 @@ class DoseViewModel(
         if (src != null) DdLog.i("MOVE source foot=${src.foot} plane=${src.surface} face=${fmt(src.faceDeg)}")
     }
 
-    private fun onShieldMoved(shield: Shield?, snapped: Boolean) {
+    private fun onShieldMoved(moved: Shield?, snapped: Boolean) {
+        // a drag never ends inside the user's clearance (taste profile D14); a snapped point is clear already
+        val shield = moved?.let { m -> if (snapped) m else shieldLanding(_state.value, m.center).let { p -> m.copy(x = p.x, z = p.z) } }
         update { s -> s.copy(dragging = null, shields = if (shield == null) s.shields else s.shields.map { if (it.id == shield.id) shield else it }) }
         if (shield != null) {
             DdLog.i("MOVE shield id=${shield.id} at=(${fmt(shield.x)}, ${fmt(shield.z)}) face=${fmt(shield.faceDeg)} snapped=$snapped")
@@ -380,6 +388,11 @@ class DoseViewModel(
         }
         val planeY = if (plane.semantic == FLOOR) s.floorY ?: p.y else p.y
         val head = s.head
+        if (plane.semantic == FLOOR && head != null) {
+            // the pot on the floor stays 0.6 m clear of the user (taste profile D14); on a desk it stands where the desk is
+            val q = Clearance.pushOut(P2(p.x, p.z), P2.of(head), Clearance.SMALL_M, s.heading ?: P2(0f, -1f))
+            p = Vec3(q.x, p.y, q.z)
+        }
         val ex = frameEx ?: head?.let { P2(it.x - p.x, it.z - p.z).takeIf { d -> d.length > 0.05f }?.normalized() } ?: P2(0f, 1f)
         val face = faceDeg ?: Math.toDegrees(atan2(ex.z.toDouble(), ex.x.toDouble())).toFloat()
         val src = SourceUi(p.x, p.z, planeY, plane.semantic, plane.id, face, ex)
@@ -407,7 +420,7 @@ class DoseViewModel(
         val src = s.source ?: return null
         val snap = shieldSnapPoint(s)
         val snapped = snap != null && (p - snap).length <= SNAP_SHIELD_M
-        val at = if (snapped) snap!! else p
+        val at = if (snapped) snap!! else shieldLanding(s, p)
         val face =
             when {
                 snapped -> Shield.faceTowards(at, src.foot)
@@ -436,7 +449,7 @@ class DoseViewModel(
         val snapped = snap != null && (p - snap).length <= SNAP_SHIELD_M
         val at = if (snapped) snap!! else p
         val face = if (snapped) Shield.faceTowards(at, s.source!!.foot) else faceDeg
-        onShieldMoved(existing.copy(x = at.x, z = at.z, faceDeg = face, tMm = tMm ?: existing.tMm), snapped)
+        onShieldMoved(existing.copy(x = at.x, z = at.z, faceDeg = face, tMm = tMm ?: existing.tMm, hidden = false), snapped)
     }
 
     private fun onPlaceShield() {
@@ -450,11 +463,44 @@ class DoseViewModel(
         update { it.copy(aiming = if (it.aiming == Aiming.SHIELD) Aiming.NONE else Aiming.SHIELD, selectedShield = null, selectedSource = false, menuOpen = false) }
     }
 
-    private fun onDeleteShield() {
+    private fun onDeleteShield(id: Int?) {
         val s = _state.value
-        val id = s.selectedShield ?: return
-        update { st -> st.copy(shields = st.shields.filter { it.id != id }, selectedShield = null, lastShieldId = st.shields.lastOrNull { it.id != id }?.id) }
+        if (id == null || s.shields.none { it.id == id } || !s.ready) return
+        update { st -> st.copy(shields = st.shields.filter { it.id != id }, selectedShield = st.selectedShield.takeIf { it != id }, lastShieldId = st.shields.lastOrNull { it.id != id }?.id, dragging = null) }
         DdLog.i("SHIELD deleted id=$id")
+    }
+
+    /**
+     * "Bring to front" from the shield list (taste profile D9 / D14): 1.2 m ahead of the head along its level
+     * heading, facing the user, shown again and selected; reachable while standing inside the shield.
+     */
+    fun shieldToFront(id: Int): Shield? {
+        val s = _state.value
+        val old = s.shields.firstOrNull { it.id == id } ?: return null
+        if (!s.ready || s.shieldsHidden) return null
+        val head = s.head?.let { P2.of(it) } ?: return null
+        val heading = s.heading ?: s.source?.let { (it.foot - head).normalized() } ?: P2(0f, -1f)
+        val at = Clearance.inFront(head, heading)
+        val moved = old.copy(x = at.x, z = at.z, faceDeg = Shield.faceTowards(at, head), hidden = false)
+        update { st -> st.copy(shields = st.shields.map { if (it.id == id) moved else it }, selectedShield = id, selectedSource = false, lastShieldId = id, aiming = Aiming.NONE, dragging = null, tab = if (st.drillRunning) st.tab else Tab.SHIELD) }
+        DdLog.i("SHIELD front id=$id at=(${fmt(at.x)}, ${fmt(at.z)}) head=(${fmt(head.x)}, ${fmt(head.z)})")
+        return moved
+    }
+
+    private fun onShieldHidden(id: Int, hidden: Boolean) {
+        val s = _state.value
+        if (!s.ready || s.shields.none { it.id == id }) return
+        update { st -> st.copy(shields = st.shields.map { if (it.id == id) it.copy(hidden = hidden) else it }, selectedShield = if (hidden && st.selectedShield == id) null else st.selectedShield, dragging = null) }
+        DdLog.i("SHIELD id=$id hidden=$hidden")
+    }
+
+    private fun onShieldListTapped(id: Int) {
+        val s = _state.value
+        val sh = s.shields.firstOrNull { it.id == id } ?: return
+        if (!s.interactive || s.shieldsHidden) return
+        if (sh.hidden) return onShieldHidden(id, false).also { update { it.copy(selectedShield = id, selectedSource = false, lastShieldId = id) } }
+        update { it.copy(selectedShield = if (it.selectedShield == id) null else id, selectedSource = false, lastShieldId = id, aiming = Aiming.NONE) }
+        DdLog.i("SELECT shield id=$id (list)")
     }
 
     private fun onThickness(step: Int) {
@@ -522,12 +568,12 @@ class DoseViewModel(
         val local = if (src != null && s.head != null) src.frame.local(s.head) else null
         val shields = s.shields.joinToString(";") { sh ->
             val l = src?.frame?.local(Vec3(sh.x, src.core.y, sh.z))
-            "#${sh.id} t=${sh.tMm} at=(${fmt(l?.x ?: sh.x)},${fmt(l?.z ?: sh.z)}) yaw=${fmt(src?.frame?.localFace(sh.faceDeg) ?: sh.faceDeg)}"
+            "#${sh.id} t=${sh.tMm} at=(${fmt(l?.x ?: sh.x)},${fmt(l?.z ?: sh.z)}) yaw=${fmt(src?.frame?.localFace(sh.faceDeg) ?: sh.faceDeg)}${if (sh.hidden) " hidden" else ""}"
         }
         val d = s.drill
         return "STATE ${s.designState} iso=${s.isotope.tag} H=${r?.let { fmt(it.h) } ?: "-"} show=${r?.let { Dose.rateText(it.h) } ?: "-"} zone=${r?.zone ?: "-"} d=${r?.let { fmt(it.d) } ?: "-"} A=${r?.let { fmt(it.attenuation) } ?: "-"} blocked=${r?.takeIf { it.shielded }?.let { Dose.blockedText(it.attenuation) } ?: "-"} cum=${fmt(s.cumulative)} " +
             "head=${local?.let { "(${fmt(it.x)},${fmt(it.y)},${fmt(it.z)})" } ?: "-"} source=${src?.let { "${it.surface}(${fmt(it.x)},${fmt(it.planeY)},${fmt(it.z)})" } ?: "-"} shields=[$shields] sel=${if (s.selectedSource) "source" else s.selectedShield?.let { "shield$it" } ?: "-"} " +
-            "aim=${s.aiming} tab=${s.tab} drill=${d?.let { "${it.kind.tag}:${it.phase} cum=${fmt(it.cum)} hStart=${fmt(it.hStart)} target=${fmt(it.target)} code=${it.code} read=${it.read} inSpot=${it.inSpot}" } ?: "-"} lost=${s.trackingLost} menu=${s.menuOpen} snack=${s.snack?.kind ?: "-"} coach=${s.coach} lang=${s.settings.language.tag}"
+            "aim=${s.aiming} tab=${s.tab} drill=${d?.let { "${it.kind.tag}:${it.phase} cum=${fmt(it.cum)} hStart=${fmt(it.hStart)} target=${fmt(it.target)} code=${it.code} read=${it.read} inSpot=${it.inSpot}" } ?: "-"} lost=${s.trackingLost} menu=${s.menuOpen} snack=${s.snack?.kind ?: "-"} coach=${s.coach} lang=${s.settings.language.tag} sound=${s.settings.geiger} heat=${s.settings.heat} snap=${s.settings.snap}"
     }
 
     /** Debug: change the state directly. */

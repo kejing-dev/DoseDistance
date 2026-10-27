@@ -5,15 +5,11 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import io.embodit.dosedistance.platform.DdLog
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.math.PI
-import kotlin.math.exp
-import kotlin.math.ln
-import kotlin.math.sin
-import kotlin.random.Random
 
 /**
- * Geiger clicks (design `model.geiger`, N5): one streaming AudioTrack fed by a small thread. Clicks come
- * as a Poisson-like stream at [rate] per second (±20 % jitter); [tone] switches to a continuous beep.
+ * Geiger clicks (design `model.geiger`, N5): one streaming AudioTrack fed by a small thread with
+ * [GeigerSynth]. Clicks come as a Poisson-like stream at [rate] per second; [tone] adds a short soft pip
+ * (v0.1.1: no continuous beep). Muted from the dosimeter's speaker key (`Settings.geiger`).
  * Plain Android audio, no SDK. Every [start] has a [stop] (scene pause / detach).
  */
 class Geiger {
@@ -65,39 +61,13 @@ class Geiger {
                 .onFailure { DdLog.w("GEIGER track failed: $it") }
                 .getOrNull() ?: return
         val buf = ShortArray(CHUNK)
-        val click = clickShape(sr)
-        var untilNext = 0.0
-        var clickPos = -1
-        var phase = 0.0
+        val synth = GeigerSynth(sr)
         runCatching { track.play() }
         try {
             while (running) {
-                val r = rate.toDouble()
-                val beep = tone
-                for (i in buf.indices) {
-                    var v = 0.0
-                    if (beep) {
-                        phase += 2 * PI * TONE_HZ / sr
-                        if (phase > 2 * PI) phase -= 2 * PI
-                        v = sin(phase) * 0.18
-                    } else if (r > 0.0) {
-                        untilNext -= 1.0 / sr
-                        if (untilNext <= 0.0) {
-                            clickPos = 0
-                            clicks.incrementAndGet()
-                            // exponential gaps around the mean, kept within ±20 % of it on average by clamping the tail
-                            val mean = 1.0 / r
-                            val gap = -ln(1.0 - Random.nextDouble().coerceIn(0.0, 0.999)) * mean
-                            untilNext = gap.coerceIn(mean * 0.2, mean * 3.0)
-                        }
-                    }
-                    if (clickPos >= 0) {
-                        v += click[clickPos]
-                        clickPos++
-                        if (clickPos >= click.size) clickPos = -1
-                    }
-                    buf[i] = (v.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
-                }
+                val before = synth.clicks
+                synth.fill(buf, rate, tone)
+                clicks.addAndGet(synth.clicks - before)
                 if (track.write(buf, 0, buf.size) < 0) break
             }
         } finally {
@@ -107,17 +77,8 @@ class Geiger {
         }
     }
 
-    private fun clickShape(sr: Int): DoubleArray {
-        val n = (sr * 0.004).toInt()
-        return DoubleArray(n) { i ->
-            val t = i.toDouble() / sr
-            (Random.nextDouble() * 2 - 1) * exp(-t * 1400.0) * 0.6
-        }
-    }
-
     private companion object {
         const val SAMPLE_RATE = 22050
         const val CHUNK = 441
-        const val TONE_HZ = 1800.0
     }
 }

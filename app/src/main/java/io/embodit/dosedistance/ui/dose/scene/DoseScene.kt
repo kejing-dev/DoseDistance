@@ -18,11 +18,13 @@ import com.pico.spatial.ui.foundation.content.SpatialViewAttachments
 import com.pico.spatial.ui.foundation.gesture.SpatialDragValue
 import com.pico.spatial.ui.foundation.gesture.SpatialTapValue
 import com.pico.spatial.ui.geometry.Offset3D
+import io.embodit.dosedistance.domain.Clearance
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.DragLine
 import io.embodit.dosedistance.domain.Drills
 import io.embodit.dosedistance.domain.FacePanel
 import io.embodit.dosedistance.domain.HeadPose
+import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.P2
 import io.embodit.dosedistance.domain.PlaneSurface
 import io.embodit.dosedistance.domain.Quat4
@@ -32,6 +34,7 @@ import io.embodit.dosedistance.domain.Shadow
 import io.embodit.dosedistance.domain.Shield
 import io.embodit.dosedistance.domain.SurfaceHit
 import io.embodit.dosedistance.domain.Vec3
+import io.embodit.dosedistance.domain.planDistance
 import io.embodit.dosedistance.platform.DdGraph
 import io.embodit.dosedistance.platform.DdLog
 import io.embodit.dosedistance.ui.dose.Aiming
@@ -44,6 +47,7 @@ import io.embodit.dosedistance.ui.dose.SNAP_TABLE_M
 import io.embodit.dosedistance.ui.dose.SourceUi
 import io.embodit.dosedistance.ui.dose.UNSNAP_SHIELD_M
 import io.embodit.dosedistance.ui.dose.components.PanelSizes
+import io.embodit.dosedistance.ui.dose.shieldLanding
 import io.embodit.dosedistance.ui.dose.shieldSnapPoint
 import java.util.Locale
 import kotlin.math.abs
@@ -148,6 +152,8 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
     private val shieldViews = HashMap<Int, ShieldView>()
     private val shadowViews = HashMap<Int, ShadowView>()
     private var ringsView: RingsView? = null
+    private var heatView: HeatView? = null
+    private val fadedShields = HashSet<Int>()
     private var aids: AidsView? = null
     private var trefoil: Material? = null
     private var pb: Material? = null
@@ -272,6 +278,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         pace(ENTITY_GAP_SLOW_MS)
         colliders.sync(planes.all)
         pace(ENTITY_GAP_SLOW_MS)
+        heatView = HeatView(root, m)
         ringsView = RingsView(root, m)
         aids = AidsView(root, meshes, m)
         built = true
@@ -361,6 +368,9 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         shadowViews.values.forEach { runCatching { it.destroy() } }
         shadowViews.clear()
         runCatching { ringsView?.destroy() }
+        runCatching { heatView?.destroy() }
+        heatView = null
+        fadedShields.clear()
         runCatching { colliders?.clear() }
         colliders = null
         runCatching { rig?.release() }
@@ -463,10 +473,12 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         }
         val crossed = reading?.crossed ?: emptySet()
         val hidden = state.shieldsHidden
-        for (s in effShields().ifEmpty { state.shields }) {
+        val live = liveShield
+        for (s0 in state.shields) {
+            val s = if (live != null && live.id == s0.id) live else s0
             val v = shieldViews[s.id] ?: continue
-            v.show(!hidden)
-            if (hidden) continue
+            v.show(!hidden && !s.hidden)
+            if (hidden || s.hidden) continue
             val lifted = (dragWhat as? DragWhat.ShieldOf)?.id == s.id
             v.place(s, floorY, lifted)
             v.look(selected = state.selectedShield == s.id || lifted, shielding = s.id in crossed)
@@ -605,9 +617,11 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             gazeMs = 0L
         }
         if (reading?.crossed != prevCrossed) placeViews()
+        if (judged != null) fadeShields(h)
         if (now - lastTickMs >= TICK_MS) {
             lastTickMs = now
-            sink(DoseEvent.Tick(if (src != null) reading else null, doseAcc, judged, gazeMs, geiger.clicks.get(), now))
+            val heading = P2(f.x, f.z).takeIf { it.length > 0.1f }?.normalized() ?: if (hasHead) pose.level() else null
+            sink(DoseEvent.Tick(if (src != null) reading else null, doseAcc, judged, gazeMs, geiger.clicks.get(), now, heading))
             doseAcc = 0f
         }
         if (now - lastGeigerMs >= GEIGER_MS) {
@@ -621,6 +635,27 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         }
     }
 
+    /**
+     * Shields the user stands in or right at turn see-through (taste profile D14): head within
+     * [Clearance.FADE_IN_M] of the panel on the floor, back above [Clearance.FADE_OUT_M].
+     */
+    private fun fadeShields(head: Vec3) {
+        val hp = P2(head.x, head.z)
+        for (s in effShields()) {
+            val v = shieldViews[s.id] ?: continue
+            val d = s.planDistance(hp)
+            val was = s.id in fadedShields
+            val on = if (was) d < Clearance.FADE_OUT_M else d < Clearance.FADE_IN_M
+            if (on != was) {
+                if (on) fadedShields += s.id else fadedShields -= s.id
+                DdLog.i(String.format(Locale.US, "SHIELD fade id=%d on=%b d=%.2f", s.id, on, d))
+            }
+            v.fade(on)
+        }
+    }
+
+    fun fadedShieldIds(): Set<Int> = fadedShields.toSet()
+
     /** Rings and shadows: rebuilt when the source, the shields, the isotope or the head height (> 10 cm) change, at most 10 Hz. */
     private fun geometry(now: Long) {
         val state = ui
@@ -631,6 +666,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             if (geomKey != "none") {
                 geomKey = "none"
                 for ((k, w) in rings.clearPlan()) meshWork[k] = w
+                heatView?.let { hv -> for ((k, w) in hv.clearPlan()) meshWork[k] = w }
                 for ((id, v) in shadowViews) for ((k, w) in v.plan("shadow$id", null, 0f)) meshWork[k] = w
             }
             return
@@ -640,7 +676,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         val shields = effShields()
         val key = buildString {
             append(state.isotope.tag).append('|').append(src.x).append(',').append(src.z).append(',').append(src.planeY)
-            append('|').append(geomHeadY).append('|').append(state.settings.rings).append('|').append(state.shieldsHidden)
+            append('|').append(geomHeadY).append('|').append(state.settings.rings).append('|').append(state.shieldsHidden).append('|').append(state.settings.heat)
             for (s in shields) append('|').append(s)
         }
         if (key == geomKey || now - lastGeomMs < GEOM_MS) return
@@ -651,10 +687,20 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             val segs = Rings.segments(state.isotope, src.core, geomHeadY, shields, floorY)
             for ((k, w) in rings.plan(segs, src.foot, floorY)) meshWork[k] = w
         }
+        heatView?.let { hv ->
+            hv.show(state.settings.heat)
+            if (state.settings.heat) {
+                val t0 = SystemClock.elapsedRealtime()
+                val cells = Heat.cells(state.isotope, src.core, geomHeadY, shields, floorY)
+                for ((k, w) in hv.plan(cells, src.foot, floorY)) meshWork[k] = w
+                val ms = SystemClock.elapsedRealtime() - t0
+                if (ms > 8) DdLog.i("HEAT cells=${cells.size} ms=$ms")
+            }
+        }
         for ((id, v) in shadowViews) {
             val s = shields.firstOrNull { it.id == id }
             val q = if (s == null || state.shieldsHidden) null else Shadow.quad(src.foot, src.core.y - floorY, s, geomHeadY - floorY)
-            v.show(s != null && !state.shieldsHidden)
+            v.show(s != null && !state.shieldsHidden, withFill = !state.settings.heat)
             for ((k, w) in v.plan("shadow$id", q, floorY)) meshWork[k] = w
         }
     }
@@ -692,10 +738,14 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             src == null -> a.hideShield()
             state.aiming == Aiming.SHIELD && state.interactive -> {
                 val p = DdGraph.debugAim?.let { (x, z) -> src.frame.floorPoint(x, z) } ?: gazeHit()?.takeIf { it.plane.semantic == FLOOR }?.point?.let { P2(it.x, it.z) }
-                if (p == null || snap == null) a.shield(snap, snap?.let { Shield.faceTowards(it, src.foot) } ?: 0f, floorY, false, now)
+                if (p != null && snap == null) {
+                    val at = shieldLanding(state, p)
+                    val face = state.head?.let { Shield.faceTowards(at, P2(it.x, it.z)) } ?: Shield.faceTowards(at, src.foot)
+                    a.shield(at, face, floorY, false, now, ghostAt = at, ghostFace = face)
+                } else if (p == null || snap == null) a.shield(snap, snap?.let { Shield.faceTowards(it, src.foot) } ?: 0f, floorY, false, now)
                 else {
                     val snapped = (p - snap).length <= SNAP_SHIELD_M
-                    val at = if (snapped) snap else p
+                    val at = if (snapped) snap else shieldLanding(state, p)
                     val face = if (snapped) Shield.faceTowards(at, src.foot) else state.head?.let { Shield.faceTowards(at, P2(it.x, it.z)) } ?: Shield.faceTowards(at, src.foot)
                     a.shield(at, face, floorY, snapped, now, ghostAt = at, ghostFace = face)
                 }
@@ -1072,7 +1122,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
                 liveSnapped = snapped
                 liveShield =
                     if (snapped && snap != null && src != null) s.copy(x = snap.x, z = snap.z, faceDeg = Shield.faceTowards(snap, src.foot))
-                    else s.copy(x = p.x, z = p.z)
+                    else shieldLanding(state, p).let { q -> s.copy(x = q.x, z = q.z) }
             }
         }
     }

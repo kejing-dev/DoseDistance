@@ -102,4 +102,15 @@
     <string name="menu_exit">Exit</string>
     <string name="lang_zh">中文</string>
     <string name="lang_en">EN</string>
+    <string name="action_mute">Mute</string>
+    <string name="action_unmute">Sound on</string>
+    <string name="heat_legend">Floor</string>
+    <string name="menu_heat">Floor colour map</string>
+    <string name="menu_snap">Shield snap</string>
+    <string name="shield_item">Shield %1$d · %2$d mm</string>
+    <string name="shield_item_hidden">Shield %1$d · hidden</string>
+    <string name="shield_none">No shields yet: tap Place shield, then the floor</string>
+    <string name="action_to_front">Bring in front of me</string>
+    <string name="action_hide">Hide</string>
+    <string name="action_show">Show</string>
 </resources>

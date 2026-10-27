@@ -1,5 +1,6 @@
 package io.embodit.dosedistance.ui.dose
 
+import io.embodit.dosedistance.domain.Clearance
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.Isotope
 import io.embodit.dosedistance.domain.P2
@@ -7,6 +8,7 @@ import io.embodit.dosedistance.domain.PlaneSurface
 import io.embodit.dosedistance.domain.Reading
 import io.embodit.dosedistance.domain.Settings
 import io.embodit.dosedistance.domain.Shield
+import io.embodit.dosedistance.domain.Snap
 import io.embodit.dosedistance.domain.SourceFrame
 import io.embodit.dosedistance.domain.SurfaceHit
 import io.embodit.dosedistance.domain.Vec3
@@ -122,6 +124,8 @@ data class DoseUiState(
     val snack: SnackUi? = null,
     val coach: Boolean = false,
     val head: Vec3? = null,
+    /** The head's level heading (for "bring to front", taste profile D9). */
+    val heading: P2? = null,
 ) {
     val isotope: Isotope
         get() = settings.isotope
@@ -137,7 +141,7 @@ data class DoseUiState(
         get() = drill?.kind == DrillKind.DISTANCE && drill.running
 
     val visibleShields: List<Shield>
-        get() = if (shieldsHidden) emptyList() else shields
+        get() = if (shieldsHidden) emptyList() else shields.filter { !it.hidden }
 
     /** Drill 3 locks the source (design `rules.select`). */
     val sourceLocked: Boolean
@@ -214,7 +218,7 @@ sealed interface DoseEvent {
     data class BlockChanged(val reason: String?) : DoseEvent
 
     /** 10 Hz from the frame system: the reading at the (judged) head, the dose integrated since the last tick, the gaze time on the pot. */
-    data class Tick(val reading: Reading?, val dDose: Float, val head: Vec3?, val gazeMs: Long, val clicks: Long, val nowMs: Long) : DoseEvent
+    data class Tick(val reading: Reading?, val dDose: Float, val head: Vec3?, val gazeMs: Long, val clicks: Long, val nowMs: Long, val heading: P2? = null) : DoseEvent
 
     data class PlaneTapped(val hit: SurfaceHit) : DoseEvent
 
@@ -240,7 +244,16 @@ sealed interface DoseEvent {
 
     data object PlaceShieldClicked : DoseEvent
 
-    data object DeleteShieldClicked : DoseEvent
+    /** Deletes shield [id] (the dosimeter's shield list); null = the selected one. */
+    data class DeleteShield(val id: Int?) : DoseEvent
+
+    /** Moves shield [id] 1.2 m in front of the head, facing the user (taste profile D9 / D14). */
+    data class ShieldToFront(val id: Int) : DoseEvent
+
+    data class ShieldHidden(val id: Int, val hidden: Boolean) : DoseEvent
+
+    /** A shield's name in the list: selects it (thickness keys, thumbstick). */
+    data class ShieldListTapped(val id: Int) : DoseEvent
 
     data class ThicknessStep(val step: Int) : DoseEvent
 
@@ -261,6 +274,10 @@ sealed interface DoseEvent {
     data class GeigerSet(val on: Boolean) : DoseEvent
 
     data class RingsSet(val on: Boolean) : DoseEvent
+
+    data class HeatSet(val on: Boolean) : DoseEvent
+
+    data class SnapSet(val on: Boolean) : DoseEvent
 
     data class LanguageSelected(val language: io.embodit.dosedistance.domain.Language) : DoseEvent
 
@@ -287,17 +304,24 @@ sealed interface DoseEffect {
     data class Feedback(val kind: String) : DoseEffect
 }
 
-/** The snap point for a shield (design `rules.snap`): 0.5 m from the source towards the user, or drill 3's midpoint of source and spot. */
+/**
+ * The snap point for a shield (design `rules.snap`, v0.1.1 [Snap.point]): up to 0.5 m from the source towards the
+ * user, or drill 3's midpoint of source and spot, always 0.8 m clear of the user; null when the snap is off or
+ * no point keeps the user clear.
+ */
 fun shieldSnapPoint(s: DoseUiState): P2? {
+    if (!s.settings.snap) return null
     val src = s.source ?: return null
     val spot = s.drill?.takeIf { it.kind == DrillKind.SHIELD && it.running }?.spot
-    if (spot != null) return (src.foot + spot) * 0.5f
-    val head = s.head
-    val dir = head?.let { P2(it.x - src.x, it.z - src.z).takeIf { d -> d.length > 0.05f }?.normalized() } ?: src.frameEx
-    return src.foot + dir * SNAP_SHIELD_FROM_M
+    return Snap.point(src.foot, s.head?.let { P2.of(it) }, spot, src.frameEx)
 }
 
-const val SNAP_SHIELD_FROM_M = 0.5f
+/** Where a shield may stand: pushed out of the user's clearance (taste profile D14). */
+fun shieldLanding(s: DoseUiState, p: P2): P2 {
+    val head = s.head?.let { P2.of(it) }
+    val toSource = s.source?.let { src -> head?.let { src.foot - it } } ?: s.heading ?: P2(0f, -1f)
+    return Clearance.pushOut(p, head, Clearance.SHIELD_M, toSource)
+}
 const val SNAP_SHIELD_M = 0.10f
 const val UNSNAP_SHIELD_M = 0.15f
 const val SNAP_TABLE_M = 0.15f

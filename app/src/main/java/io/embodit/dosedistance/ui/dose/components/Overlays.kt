@@ -60,6 +60,8 @@ internal fun MoreMenu(state: DoseUiState?, onEvent: (DoseEvent) -> Unit) {
         val ink = PicoTheme.colorScheme.labelPrimary
         SwitchRow("menu_geiger", rs(R.string.menu_geiger), state.settings.geiger) { onEvent(DoseEvent.GeigerSet(it)) }
         SwitchRow("menu_rings", rs(R.string.menu_rings), state.settings.rings) { onEvent(DoseEvent.RingsSet(it)) }
+        SwitchRow("menu_heat", rs(R.string.menu_heat), state.settings.heat) { onEvent(DoseEvent.HeatSet(it)) }
+        SwitchRow("menu_snap", rs(R.string.menu_snap), state.settings.snap) { onEvent(DoseEvent.SnapSet(it)) }
         Row(modifier = Modifier.fillMaxWidth().height(MenuRowH), verticalAlignment = Alignment.CenterVertically) {
             Text(text = rs(R.string.menu_language), color = ink, style = DdType.title, maxLines = 1, modifier = Modifier.weight(1f))
             Segments(items = Language.entries, selected = state.settings.language, width = 136.dp, enabled = true, name = { "lang_${it.tag}" }, onSelect = { onEvent(DoseEvent.LanguageSelected(it)) }, height = 44.dp) { item ->

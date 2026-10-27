@@ -83,6 +83,11 @@ ICONS = {
     "ic_footsteps": fill("M8 3.5c1.6 0 2.5 1.8 2.5 4s-.9 4-2.5 4-2.5-1.8-2.5-4 .9-4 2.5-4z") + dot(8, 14, 1.8) + fill("M16 9.5c1.6 0 2.5 1.8 2.5 4s-.9 4-2.5 4-2.5-1.8-2.5-4 .9-4 2.5-4z") + dot(16, 20, 1.8),
     "ic_spot": stroke(circle(12, 15, 7)) + dot(12, 6, 2.2) + stroke("M12 8.5v6"),
     "ic_info": stroke(circle(12, 12, 9)) + stroke("M12 11v6") + dot(12, 7.5, 1.3),
+    # v0.1.1: speaker on / muted (the dosimeter's mute key), eye off (hide a shield), bring to front (a panel stepping towards you)
+    "ic_sound": fill("M3 9h4l5-4v14l-5-4H3z") + stroke("M15.5 9a4 4 0 0 1 0 6") + stroke("M18.5 6.5a7.5 7.5 0 0 1 0 11"),
+    "ic_mute": fill("M3 9h4l5-4v14l-5-4H3z") + stroke("M16 9l5 6M21 9l-5 6"),
+    "ic_eye_off": stroke("M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z") + stroke("M12 12m-3,0a3,3 0 1 0 6,0a3,3 0 1 0 -6,0") + stroke("M4 20 20 4"),
+    "ic_front": stroke("M8 3h8v9H8z") + stroke("M12 14v6M9 17l3 3 3-3"),
 }
 
 for name, body in ICONS.items():

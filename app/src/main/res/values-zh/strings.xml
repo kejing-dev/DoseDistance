@@ -102,4 +102,15 @@
     <string name="menu_exit">退出</string>
     <string name="lang_zh">中文</string>
     <string name="lang_en">EN</string>
+    <string name="action_mute">静音</string>
+    <string name="action_unmute">打开声音</string>
+    <string name="heat_legend">地面</string>
+    <string name="menu_heat">地面颜色图</string>
+    <string name="menu_snap">铅屏吸附</string>
+    <string name="shield_item">铅屏 %1$d · %2$d mm</string>
+    <string name="shield_item_hidden">铅屏 %1$d · 已隐藏</string>
+    <string name="shield_none">还没有铅屏：点「放铅屏」再点地面</string>
+    <string name="action_to_front">移到面前</string>
+    <string name="action_hide">隐藏</string>
+    <string name="action_show">显示</string>
 </resources>

@@ -36,7 +36,9 @@ import com.pico.spatial.ui.foundation.material.backgroundMaterial
 import com.pico.spatial.ui.platform.Material
 import io.embodit.dosedistance.R
 import io.embodit.dosedistance.domain.Dose
+import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.Isotope
+import io.embodit.dosedistance.domain.Shield
 import io.embodit.dosedistance.domain.Zone
 import io.embodit.dosedistance.ui.dose.Aiming
 import io.embodit.dosedistance.ui.dose.DoseEvent
@@ -50,6 +52,7 @@ import io.embodit.dosedistance.ui.theme.DdColors
 import io.embodit.dosedistance.ui.theme.DdType
 import kotlin.math.log10
 import kotlin.math.max
+import kotlin.math.pow
 
 /**
  * The dosimeter (design `panels.dosimeter`, 400 x 444 dp at 0.75): nameplate, the reading capsule, the
@@ -114,9 +117,24 @@ internal fun DosimeterPanel(state: DoseUiState?, onEvent: (DoseEvent) -> Unit) {
             val audible = state.settings.geiger && !lost && reading != null
             val blink = if (audible && state.clicks % 2L == 1L) 1f else 0.45f
             Icon(painter = painterResource(R.drawable.ic_geiger), contentDescription = null, modifier = Modifier.size(28.dp).alpha(if (audible) blink else 0.3f).probe("geiger"), tint = if (audible) ink else DdColors.StaleGrey)
+            Spacer(modifier = Modifier.width(8.dp))
+            // v0.1.1 (taste profile D15): the mute key, always in sight; the state is remembered (Settings.geiger)
+            val soundOn = state.settings.geiger
+            Key(
+                name = "mute",
+                icon = if (soundOn) R.drawable.ic_sound else R.drawable.ic_mute,
+                description = rs(if (soundOn) R.string.action_mute else R.string.action_unmute),
+                enabled = true,
+                container = if (soundOn) null else PicoTheme.colorScheme.interaction,
+                content = if (soundOn) null else DdColors.StripeInk,
+            ) { onEvent(DoseEvent.GeigerSet(!soundOn)) }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        ZoneBar(h = if (lost) null else reading?.h)
+        Row(modifier = Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.Bottom) {
+            // the bar doubles as the floor map's legend (v0.1.1): the same ramp is drawn on the floor
+            if (state.settings.heat) Text(text = rs(R.string.heat_legend), color = PicoTheme.colorScheme.labelSecondary, style = DdType.small, maxLines = 1, softWrap = false, modifier = Modifier.width(44.dp).probe("heat_legend"))
+            Box(modifier = Modifier.weight(1f)) { ZoneBar(h = if (lost) null else reading?.h, ramp = state.settings.heat) }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         // row 4: distance · blocked · cumulative + reset
         Row(modifier = Modifier.fillMaxWidth().height(32.dp).alpha(if (lost) 0.5f else 1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -162,9 +180,12 @@ private fun Chip(name: String, icon: Int, value: String, lit: Boolean) {
     }
 }
 
-/** The log-scale zone bar (0.1 - 10 000 µSv/h, five zone colours, tick numbers, a white cursor). */
+/**
+ * The log-scale zone bar (0.1 - 10 000 µSv/h, five zone colours, tick numbers, a white cursor). With [ramp]
+ * (floor map on) the colours are the floor map's continuous ramp, so the bar is its legend.
+ */
 @Composable
-private fun ZoneBar(h: Float?) {
+private fun ZoneBar(h: Float?, ramp: Boolean = false) {
     val ticks = listOf(0.5f to "0.5", 10f to "10", 100f to "100", 1000f to "1000")
     val bounds = listOf(0.1f, 0.5f, 10f, 100f, 1000f, 10000f)
     val colors = Zone.entries.map { DdColors.ofZone(it) }
@@ -177,7 +198,14 @@ private fun ZoneBar(h: Float?) {
         }
         Canvas(modifier = Modifier.fillMaxSize()) {
             val barTop = size.height - 8.dp.toPx()
-            for (i in 0 until 5) {
+            if (ramp) {
+                val n = 64
+                val sw = size.width / n
+                for (k in 0 until n) {
+                    val v = 10.0.pow((k + 0.5) / n * 5.0 - 1.0).toFloat()
+                    drawRect(color = DdColors.heat(Heat.level(v)), topLeft = Offset(k * sw, barTop), size = Size(sw + 0.5f, 8.dp.toPx()))
+                }
+            } else for (i in 0 until 5) {
                 val x0 = size.width * pos(bounds[i])
                 val x1 = size.width * pos(bounds[i + 1])
                 drawRect(color = colors[i], topLeft = Offset(x0, barTop), size = Size(x1 - x0, 8.dp.toPx()))
@@ -234,7 +262,11 @@ private fun ThicknessKeys(state: DoseUiState, onEvent: (DoseEvent) -> Unit) {
     }
 }
 
-/** Shield page (design `tabs.shield`): place shield · delete, thickness row with "blocks 47% · ½ per 6.5 mm", hint. */
+/**
+ * Shield page (design `tabs.shield`, v0.1.1): place shield · thickness, "blocks 47% · ½ per 6.5 mm", one row per
+ * placed shield (name = select; bring in front of me · hide / show · delete: reachable while standing in the
+ * shield, taste profile D14) and the stick hint.
+ */
 @Composable
 private fun ShieldPage(state: DoseUiState, onEvent: (DoseEvent) -> Unit) {
     val ink = PicoTheme.colorScheme.labelPrimary
@@ -250,18 +282,42 @@ private fun ShieldPage(state: DoseUiState, onEvent: (DoseEvent) -> Unit) {
                 enabled = state.interactive && state.source != null,
             ) { onEvent(DoseEvent.PlaceShieldClicked) }
             Spacer(modifier = Modifier.weight(1f))
-            Key(name = "delete_shield", icon = R.drawable.ic_trash, description = rs(R.string.action_delete), enabled = state.selectedShield != null) { onEvent(DoseEvent.DeleteShieldClicked) }
-        }
-        Row(modifier = Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             ThicknessKeys(state, onEvent)
-            Spacer(modifier = Modifier.weight(1f))
-            val a = Dose.factor(state.isotope, state.thicknessShown)
-            Text(text = rs(R.string.shield_info, Dose.blockedText(a), mm(state.isotope.hvlMm)), color = ink, style = DdType.label, maxLines = 1, softWrap = false, modifier = Modifier.probe("shield_info"))
         }
-        Row(modifier = Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        val a = Dose.factor(state.isotope, state.thicknessShown)
+        Text(text = rs(R.string.shield_info, Dose.blockedText(a), mm(state.isotope.hvlMm)), color = ink, style = DdType.label, maxLines = 1, softWrap = false, modifier = Modifier.height(20.dp).probe("shield_info"))
+        if (state.shields.isEmpty()) {
+            Text(text = rs(R.string.shield_none), color = PicoTheme.colorScheme.labelSecondary, style = DdType.label, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(88.dp).probe("shield_none"))
+        } else {
+            Column(modifier = Modifier.height(88.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (sh in state.shields.sortedBy { it.id }) ShieldRow(state, sh, onEvent)
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(painter = painterResource(R.drawable.ic_rotate), contentDescription = null, modifier = Modifier.size(18.dp), tint = ink)
             Text(text = rs(R.string.hint_rotate_drag), color = ink, style = DdType.label, maxLines = 1, softWrap = false, modifier = Modifier.probe("shield_hint"))
         }
+    }
+}
+
+@Composable
+private fun ShieldRow(state: DoseUiState, sh: Shield, onEvent: (DoseEvent) -> Unit) {
+    val ink = PicoTheme.colorScheme.labelPrimary
+    val selected = state.selectedShield == sh.id
+    val enabled = state.ready && !state.shieldsHidden
+    Row(modifier = Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WordButton(
+            name = "shield_item_${sh.id}",
+            icon = R.drawable.ic_shield,
+            text = if (sh.hidden) rs(R.string.shield_item_hidden, sh.id) else rs(R.string.shield_item, sh.id, sh.tMm),
+            container = if (selected) PicoTheme.colorScheme.interaction else PicoTheme.colorScheme.fillTertiary,
+            content = if (selected) DdColors.StripeInk else ink,
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+        ) { onEvent(DoseEvent.ShieldListTapped(sh.id)) }
+        Key(name = "shield_front_${sh.id}", icon = R.drawable.ic_front, description = rs(R.string.action_to_front), enabled = enabled && state.head != null) { onEvent(DoseEvent.ShieldToFront(sh.id)) }
+        Key(name = "shield_hide_${sh.id}", icon = if (sh.hidden) R.drawable.ic_eye else R.drawable.ic_eye_off, description = rs(if (sh.hidden) R.string.action_show else R.string.action_hide), enabled = enabled) { onEvent(DoseEvent.ShieldHidden(sh.id, !sh.hidden)) }
+        Key(name = "shield_delete_${sh.id}", icon = R.drawable.ic_trash, description = rs(R.string.action_delete), enabled = state.ready && !state.drillRunning) { onEvent(DoseEvent.DeleteShield(sh.id)) }
     }
 }
 
