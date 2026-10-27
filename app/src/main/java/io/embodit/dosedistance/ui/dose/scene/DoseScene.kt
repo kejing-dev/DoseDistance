@@ -170,6 +170,8 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
     private var geomKey: String? = null
     private var geomHeadY = Float.NaN
     private var lastGeomMs = 0L
+    private var heatKey: String? = null
+    private var lastHeatMs = 0L
     private var lastPlanesSent = -1
 
     // live placement (drag / stick), never through Compose state
@@ -397,6 +399,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         liveSource = null
         liveShield = null
         geomKey = null
+        heatKey = null
         dosimeterFollow.reset()
         snackFollow.reset()
         DdLog.i("SCENE detached")
@@ -665,6 +668,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         if (src == null || floorY == null) {
             if (geomKey != "none") {
                 geomKey = "none"
+                heatKey = null
                 for ((k, w) in rings.clearPlan()) meshWork[k] = w
                 heatView?.let { hv -> for ((k, w) in hv.clearPlan()) meshWork[k] = w }
                 for ((id, v) in shadowViews) for ((k, w) in v.plan("shadow$id", null, 0f)) meshWork[k] = w
@@ -679,6 +683,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             append('|').append(geomHeadY).append('|').append(state.settings.rings).append('|').append(state.shieldsHidden).append('|').append(state.settings.heat)
             for (s in shields) append('|').append(s)
         }
+        heat(key, now, src, shields, floorY)
         if (key == geomKey || now - lastGeomMs < GEOM_MS) return
         geomKey = key
         lastGeomMs = now
@@ -687,22 +692,32 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             val segs = Rings.segments(state.isotope, src.core, geomHeadY, shields, floorY)
             for ((k, w) in rings.plan(segs, src.foot, floorY)) meshWork[k] = w
         }
-        heatView?.let { hv ->
-            hv.show(state.settings.heat)
-            if (state.settings.heat) {
-                val t0 = SystemClock.elapsedRealtime()
-                val cells = Heat.cells(state.isotope, src.core, geomHeadY, shields, floorY)
-                for ((k, w) in hv.plan(cells, src.foot, floorY)) meshWork[k] = w
-                val ms = SystemClock.elapsedRealtime() - t0
-                if (ms > 8) DdLog.i("HEAT cells=${cells.size} ms=$ms")
-            }
-        }
         for ((id, v) in shadowViews) {
             val s = shields.firstOrNull { it.id == id }
             val q = if (s == null || state.shieldsHidden) null else Shadow.quad(src.foot, src.core.y - floorY, s, geomHeadY - floorY)
             v.show(s != null && !state.shieldsHidden, withFill = !state.settings.heat)
             for ((k, w) in v.plan("shadow$id", q, floorY)) meshWork[k] = w
         }
+    }
+
+    /**
+     * The floor map: same inputs as the rings, but its 8 meshes rebuild at most every [HEAT_LIVE_MS] while a
+     * drag or a stick turn moves something (8 mesh swaps per rebuild), every [GEOM_MS] otherwise.
+     */
+    private fun heat(key: String, now: Long, src: SourceUi, shields: List<Shield>, floorY: Float) {
+        val hv = heatView ?: return
+        val state = ui
+        hv.show(state.settings.heat)
+        if (!state.settings.heat || key == heatKey) return
+        val live = drag != null || turn != null
+        if (now - lastHeatMs < (if (live) HEAT_LIVE_MS else GEOM_MS)) return
+        heatKey = key
+        lastHeatMs = now
+        val t0 = SystemClock.elapsedRealtime()
+        val cells = Heat.cells(state.isotope, src.core, geomHeadY, shields, floorY)
+        for ((k, w) in hv.plan(cells, src.foot, floorY)) meshWork[k] = w
+        val ms = SystemClock.elapsedRealtime() - t0
+        if (ms > 8) DdLog.i("HEAT cells=${cells.size} ms=$ms")
     }
 
     /** The head-gaze landing point on TABLE / FLOOR planes (the aiming ghost follows it). */
@@ -1221,6 +1236,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         const val TICK_MS = 100L
         const val GEIGER_MS = 250L
         const val GEOM_MS = 100L
+        const val HEAT_LIVE_MS = 300L
         const val HEAD_STEP_M = 0.10f
         const val POT_INSET_M = 0.07f
         const val LOG_MS = 5000L
