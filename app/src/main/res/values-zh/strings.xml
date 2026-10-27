@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 中文文案（设计包 copy） -->
+<resources>
+    <string name="app_name">剂量与距离</string>
+
+    <string name="aiming">点桌面或地面，放下放射源</string>
+    <string name="scanning">慢慢看一圈地面和桌子</string>
+    <string name="nameplate">%1$s · 教学源</string>
+    <string name="iso_tc99m">Tc-99m 锝</string>
+    <string name="iso_cs137">Cs-137 铯</string>
+    <string name="iso_co60">Co-60 钴</string>
+    <string name="too_close">贴着源了（按 0.3 m 算）</string>
+    <string name="zone_background">本底</string>
+    <string name="zone_low">低</string>
+    <string name="zone_mid">中</string>
+    <string name="zone_high">高</string>
+    <string name="zone_extreme">极高</string>
+    <string name="source_level">同高 1 m：%1$s µSv/h</string>
+    <string name="source_hvl">每 %1$s mm 减半</string>
+    <string name="hint_rotate">摇杆左右转动</string>
+    <string name="hint_rotate_drag">摇杆左右转动 · 按住拖动</string>
+    <string name="hint_select">点源选中后可拖动</string>
+    <string name="tab_source">源</string>
+    <string name="tab_shield">铅屏</string>
+    <string name="tab_drill">练习</string>
+    <string name="shield_info">挡住 %1$s · 每 %2$s mm 减半</string>
+    <string name="thickness">%1$d mm</string>
+    <string name="shield_plate">铅 %1$d mm · 挡住 %2$s</string>
+    <string name="ring_plate">%1$s m · 站这里约 %2$s</string>
+    <string name="source_plate">%1$s · 同高 1 m 处 %2$s µSv/h</string>
+    <string name="spot_plate">站这里</string>
+    <string name="footer">教学近似，非剂量评估</string>
+
+    <string name="btn_place_source">放源</string>
+    <string name="btn_remove_source">收走源</string>
+    <string name="btn_place_shield">放铅屏</string>
+    <string name="btn_start">开始</string>
+    <string name="btn_quit">放弃</string>
+    <string name="btn_again">再来一次</string>
+    <string name="btn_next">下一个</string>
+    <string name="btn_done">完成</string>
+    <string name="btn_later">先不练</string>
+    <string name="btn_got_it">知道了</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_clear">清除</string>
+    <string name="btn_exit">退出</string>
+    <string name="btn_retry">重试</string>
+    <string name="action_more">更多</string>
+    <string name="action_delete">删除铅屏</string>
+    <string name="action_reset">累计归零</string>
+    <string name="action_thinner">变薄</string>
+    <string name="action_thicker">变厚</string>
+
+    <string name="snack_shields_full">最多 2 块铅屏</string>
+    <string name="snack_snapped">吸附到位</string>
+    <string name="snack_lost">定位丢失 · 环顾四周</string>
+    <string name="snack_cleared">已全部清除</string>
+    <string name="snack_back_to_spot">回到圈里</string>
+    <string name="snack_walk_to_spot">走到圈里再开始</string>
+
+    <string name="drill_distance">距离 · 退到四分之一</string>
+    <string name="drill_time">时间 · 快进快出</string>
+    <string name="drill_shield">屏蔽 · 站着不动</string>
+    <string name="goal_distance">不用铅屏，把读数降到开始时的四分之一</string>
+    <string name="goal_time">俯身读出罐顶的编码，再退回开始的读数以下</string>
+    <string name="goal_shield">站在圈里不动，只用铅屏降到八分之一</string>
+    <string name="status_to_go">还差 %1$s m</string>
+    <string name="status_hold">保持 3 秒</string>
+    <string name="status_go_read">去读罐顶里的编码</string>
+    <string name="status_got_it">读到了 · 退！</string>
+    <string name="status_shield">不挡时 %1$s · 目标 &lt; %2$s</string>
+    <string name="status_back_to_spot">回到圈里</string>
+    <string name="budget">%1$s / %2$s µSv</string>
+
+    <string name="result_pass">通过</string>
+    <string name="result_over_budget">超预算</string>
+    <string name="result_timeout">超时</string>
+    <string name="line_distance">用了 %1$d s · 从 %2$s 降到 %3$s</string>
+    <string name="line_time">用了 %1$d s · 累计 %2$s µSv · 最近到 %3$s m</string>
+    <string name="line_shield_layers">%1$s 层半值层（每层减半）</string>
+    <string name="line_shield_drop">从 %1$s 降到 %2$s</string>
+    <string name="line_over_budget_at">超预算时离源只有 %1$s m</string>
+    <string name="line_over_stay">读完后多待了 %1$d s</string>
+    <string name="line_too_long">摆得太久</string>
+    <string name="line_not_read">要走到 0.8 m 内俯视罐口</string>
+
+    <string name="coach_line1">往后退两步，看读数怎么掉 · 点源可以拖</string>
+    <string name="coach_line2">环是地上的距离，读数按你的头算</string>
+
+    <string name="clear_title">清除源和全部铅屏？</string>
+    <string name="clear_body">累计剂量也会归零。</string>
+    <string name="blocked_title">空间能力不可用</string>
+    <string name="blocked_body">请在系统设置中允许平面识别。</string>
+    <string name="about_title">关于</string>
+    <string name="about_body">点源 + 平方反比 + 铅半值层的教学近似：不算散射、空气和真实墙柜的遮挡，分区不是法规限值；三种核素按 1 GBq 教学活度取整。µSv/h 是每小时吸收多少。不能用来评估任何真实剂量。</string>
+
+    <string name="menu_geiger">盖革声</string>
+    <string name="menu_rings">显示环</string>
+    <string name="menu_language">语言</string>
+    <string name="menu_about">关于</string>
+    <string name="menu_clear">全部清除</string>
+    <string name="menu_exit">退出</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_en">EN</string>
+</resources>

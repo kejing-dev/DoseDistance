@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- radiation yellow (design appIcon.background): the app own icon colour in the launcher -->
+    <color name="ic_launcher_background">#FFF2C230</color>
+</resources>

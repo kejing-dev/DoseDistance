@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher foreground (108 x 108; design appIcon.glyph): a flat black trefoil above three concentric arcs (the
+     1 / 2 / 3 m isodose rings, thinner with distance) on radiation yellow. Same shapes as tools/make_icons.py
+     draws for the 3D icon layers and the 512 export. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FF1B1B1B" android:pathData="M62.50,59.72A17.00,17.00 0 0 1 45.50,59.72L51.45,49.42A5.10,5.10 0 0 0 56.55,49.42ZM37.00,45.00A17.00,17.00 0 0 1 45.50,30.28L51.45,40.58A5.10,5.10 0 0 0 48.90,45.00ZM62.50,30.28A17.00,17.00 0 0 1 71.00,45.00L59.10,45.00A5.10,5.10 0 0 0 56.55,40.58Z" />
+    <path android:fillColor="#FF1B1B1B" android:pathData="M50.6,45.0a3.4,3.4 0 1 0 6.8,0a3.4,3.4 0 1 0 -6.8,0Z" />
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="3.4" android:strokeLineCap="round" android:pathData="M74.78,57.00A24.0,24.0 0 0 1 33.22,57.00" />
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="2.5" android:strokeLineCap="round" android:pathData="M79.55,59.75A29.5,29.5 0 0 1 28.45,59.75" />
+    <path android:strokeColor="#FF1B1B1B" android:strokeWidth="1.6" android:strokeLineCap="round" android:pathData="M84.31,62.50A35.0,35.0 0 0 1 23.69,62.50" />
+</vector>

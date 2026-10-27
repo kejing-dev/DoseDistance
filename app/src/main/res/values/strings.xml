@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English copy (design `copy`, shortened to the 368 dp inner width). Chinese in values-zh. -->
+<resources>
+    <string name="app_name">Dose Distance</string>
+
+    <string name="aiming">Tap a desk or the floor to place the source</string>
+    <string name="scanning">Look around at the floor and desk</string>
+    <string name="nameplate">%1$s · teaching source</string>
+    <string name="iso_tc99m">Tc-99m</string>
+    <string name="iso_cs137">Cs-137</string>
+    <string name="iso_co60">Co-60</string>
+    <string name="too_close">At source (&lt; 0.3 m)</string>
+    <string name="zone_background">Background</string>
+    <string name="zone_low">Low</string>
+    <string name="zone_mid">Medium</string>
+    <string name="zone_high">High</string>
+    <string name="zone_extreme">Extreme</string>
+    <string name="source_level">%1$s µSv/h at 1 m</string>
+    <string name="source_hvl">halves every %1$s mm</string>
+    <string name="hint_rotate">Stick ↔ rotate</string>
+    <string name="hint_rotate_drag">Stick ↔ rotate · hold to drag</string>
+    <string name="hint_select">Tap source to move</string>
+    <string name="tab_source">Source</string>
+    <string name="tab_shield">Shield</string>
+    <string name="tab_drill">Drills</string>
+    <string name="shield_info">blocks %1$s · ½ per %2$s mm</string>
+    <string name="thickness">%1$d mm</string>
+    <string name="shield_plate">Pb %1$d mm · blocks %2$s</string>
+    <string name="ring_plate">%1$s m · here ≈ %2$s</string>
+    <string name="source_plate">%1$s · %2$s µSv/h at 1 m</string>
+    <string name="spot_plate">Stand here</string>
+    <string name="footer">Teaching approximation, not a dose assessment</string>
+
+    <string name="btn_place_source">Place source</string>
+    <string name="btn_remove_source">Remove source</string>
+    <string name="btn_place_shield">Place shield</string>
+    <string name="btn_start">Start</string>
+    <string name="btn_quit">Quit</string>
+    <string name="btn_again">Try again</string>
+    <string name="btn_next">Next</string>
+    <string name="btn_done">Done</string>
+    <string name="btn_later">Not now</string>
+    <string name="btn_got_it">Got it</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_clear">Clear</string>
+    <string name="btn_exit">Exit</string>
+    <string name="btn_retry">Retry</string>
+    <string name="action_more">More</string>
+    <string name="action_delete">Delete shield</string>
+    <string name="action_reset">Reset total</string>
+    <string name="action_thinner">Thinner</string>
+    <string name="action_thicker">Thicker</string>
+
+    <string name="snack_shields_full">Max 2 shields</string>
+    <string name="snack_snapped">Snapped into place</string>
+    <string name="snack_lost">Tracking lost · look around</string>
+    <string name="snack_cleared">All cleared</string>
+    <string name="snack_back_to_spot">Back into the circle</string>
+    <string name="snack_walk_to_spot">Step into the circle to begin</string>
+
+    <string name="drill_distance">Distance · Back off</string>
+    <string name="drill_time">Time · In and out</string>
+    <string name="drill_shield">Shielding · Stand still</string>
+    <string name="goal_distance">No shields: cut it to a quarter</string>
+    <string name="goal_time">Read the code in the pot, then back off</string>
+    <string name="goal_shield">In the circle: shield down to 1/8</string>
+    <string name="status_to_go">%1$s m to go</string>
+    <string name="status_hold">Hold 3 s</string>
+    <string name="status_go_read">Go read the code in the pot</string>
+    <string name="status_got_it">Got it · back off!</string>
+    <string name="status_shield">Unshielded %1$s · target &lt; %2$s</string>
+    <string name="status_back_to_spot">Back into the circle</string>
+    <string name="budget">%1$s / %2$s µSv</string>
+
+    <string name="result_pass">Passed</string>
+    <string name="result_over_budget">Over budget</string>
+    <string name="result_timeout">Timed out</string>
+    <string name="line_distance">%1$d s · %2$s → %3$s</string>
+    <string name="line_time">%1$d s · %2$s µSv total · closest %3$s m</string>
+    <string name="line_shield_layers">%1$s half-value layers (each halves it)</string>
+    <string name="line_shield_drop">%1$s → %2$s</string>
+    <string name="line_over_budget_at">Over budget at %1$s m from the source</string>
+    <string name="line_over_stay">Stayed %1$d s too long after reading</string>
+    <string name="line_too_long">Took too long to set up</string>
+    <string name="line_not_read">Get within 0.8 m and look into the pot</string>
+
+    <string name="coach_line1">Take two steps back and watch it drop · tap the source to move it</string>
+    <string name="coach_line2">Rings are floor distance; readings are at your head</string>
+
+    <string name="clear_title">Clear the source and all shields?</string>
+    <string name="clear_body">The total dose resets too.</string>
+    <string name="blocked_title">Spatial features unavailable</string>
+    <string name="blocked_body">Allow plane detection in Settings.</string>
+    <string name="about_title">About</string>
+    <string name="about_body">A teaching approximation: point source, inverse square, lead half-value layers. No scatter, no air, real walls do not shield, zones are not legal limits; isotopes rounded at 1 GBq. µSv/h = dose per hour. Never use it to assess a real dose.</string>
+
+    <string name="menu_geiger">Geiger clicks</string>
+    <string name="menu_rings">Show rings</string>
+    <string name="menu_language">Language</string>
+    <string name="menu_about">About</string>
+    <string name="menu_clear">Clear all</string>
+    <string name="menu_exit">Exit</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_en">EN</string>
+</resources>
