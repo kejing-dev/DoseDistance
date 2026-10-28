@@ -9,11 +9,11 @@
 
 **A virtual radioactive source sits on your real desk; step closer and the dose rate jumps by the inverse square. Drag a life-size lead shield and it casts a "safe shadow" on the floor; step into it and the reading drops. Learn time, distance and shielding.**
 
-PICO OS 6 · PICO Spatial SDK 6.1.9 · Kotlin / SpatialUI · package `io.embodit.dosedistance` · v0.1.0 (pre-release / 预发布)
+PICO OS 6 · PICO Spatial SDK 6.1.9 · Kotlin / SpatialUI · package `io.embodit.dosedistance` · v0.1.2
 
-> **模拟器 QA 通过，真机未验证（Simulator-QA passed; not yet verified on a real headset）。**
+> **v0.1.2：头显试用通过，模拟器发布门禁通过（v0.1.2: tried and accepted on the headset; emulator release gate passed）。**
 
-![封面：1.8 米铅屏吸附到位正对源，地上绿色安全影子罩住人，剂量计读数 29 µSv/h，挡住 47%](docs/cover-S11-shield-snap.jpg)
+![剂量与距离 Dose Distance：两块铅屏挡住 92%，地上绿色安全影子，地面按剂量率上色](docs/vibelab/poster-2560x1440.jpg)
 
 > 截图和演示视频来自原生模拟器（PICO Emulator 6.1），由调试广播和模拟器相机驱动；**非真实手势录像**，演示视频无声。
 > Screenshots and the demo video were taken on the native PICO emulator, driven by debug broadcasts and the emulator camera; **not a recording of real hand gestures**; the demo video has no sound.
@@ -21,6 +21,18 @@ PICO OS 6 · PICO Spatial SDK 6.1.9 · Kotlin / SpatialUI · package `io.embodit
 ---
 
 ## 中文
+
+### v0.1.2 改动（按头显试用反馈）
+
+- 剂量计上加**静音键**；盖革咔哒声改柔和，高剂量时改为间隔提示音
+- 铅屏离头至少 0.8 m、源至少 0.6 m；走近铅屏变半透明；铅屏页新增**列表**（移到正前方 / 隐藏 / 删除）；吸附点改到源和你之间，可关
+- **地面剂量颜色图**：绿 → 黄 → 红 → 品红，每种颜色差 10 倍，铅屏影子画在里面
+- 放置改为**手柄射线 + 扳机**，或**眼动注视 + 捏合**；两者都没有才转头瞄准
+
+| | |
+|---|---|
+| ![地面剂量颜色图](docs/vibelab/shot-01.jpg) | ![两块铅屏和安全影子](docs/vibelab/shot-02.jpg) |
+| ![铅屏列表：移到正前方](docs/vibelab/shot-04.jpg) | ![手柄射线放铅屏](docs/vibelab/shot-07.jpg) |
 
 ### 这是什么
 
@@ -34,7 +46,7 @@ PICO OS 6 · PICO Spatial SDK 6.1.9 · Kotlin / SpatialUI · package `io.embodit
 
 ```bash
 adb shell am force-stop io.embodit.dosedistance
-adb install -r DoseDistance-v0.1.0.apk
+adb install -r DoseDistance-v0.1.2.apk
 pico-cli app launch io.embodit.dosedistance
 ```
 
@@ -73,6 +85,13 @@ APK 在 [Releases](https://github.com/kejing-dev/DoseDistance/releases) 页面�
 
 ## English
 
+### What's new in v0.1.2 (headset feedback)
+
+- **Mute** key on the dosimeter; softer Geiger clicks
+- Shields stay ≥ 0.8 m from your head (source ≥ 0.6 m) and fade when you walk into them; **shield list** (bring to front / hide / delete); the snap point now sits between the source and you, and can be turned off
+- **Floor dose-rate colour map** (green → yellow → red → magenta, one hue per decade), with the shield shadows in it
+- Place with the **controller ray + trigger** or **eye gaze + pinch**; head aim only as a fallback
+
 ### What it is
 
 Radiation protection's three rules — time, distance, shielding — learned with your own body. Look at a desk or the floor and tap to place a virtual source (lead pot + core); 1 / 2 / 3 m rings appear on the floor, coloured by dose rate. Your head is the dosimeter: step closer and the reading rises by the inverse square, step back and it falls. The panel shows dose rate, zone (low / medium / high / extreme), distance and accumulated dose, with Geiger clicks when enabled.
@@ -85,7 +104,7 @@ The footer "Teaching approximation, not a dose assessment" is always on the pane
 
 ```bash
 adb shell am force-stop io.embodit.dosedistance
-adb install -r DoseDistance-v0.1.0.apk
+adb install -r DoseDistance-v0.1.2.apk
 pico-cli app launch io.embodit.dosedistance
 ```
 
