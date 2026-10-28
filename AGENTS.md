@@ -109,6 +109,30 @@ footer 「教学近似，非剂量评估」 is always on the dosimeter. Copy in 
 re-run `python tools/subset_cjk_font.py --source ../fire-plan/app/src/main/res/font/noto_sans_sc.ttf` after
 changing zh copy).
 
+## v0.1.2 aiming (2026-10-27, user on the headset: "应该是用手柄射线 或者 eye tracking +pinch 来放置铅屏，不是用头显"; profile D1)
+
+The aiming ghost (source and shield) used to follow the head's forward ray (`gazeHit`). Now `DoseScene.updateAim` picks
+one ray per frame with `domain/Aim.choose`:
+
+1. **Controller ray** (`ControllerStick.ray`: the pose of the hand whose trigger was touched last, along its -Z, as in
+   Spatial Ruler / Access Check) while the controller is in use: a trigger / stick / button change or a 2 cm / 2° move
+   within 8 s. A controller lying still keeps reporting a pose, so it is not "in use".
+2. **Eye gaze** (`EyeTracker`, `EyeTrackingProvider`, permission `com.picovr.permission.EYE_TRACKING` asked once by
+   `EyePermissionActivity` when the Stage is ready).
+3. **Head** only when neither is available; the compact panel / shield tab then say 「没有手柄和眼动：转头对准，捏合放下」.
+
+The ghost lands where that ray meets a TABLE / FLOOR plane (shield: the floor, or the floor level when no floor plane
+covers the spot). Confirm: the controller trigger places at the ghost point (`onTrigger`); eye + pinch places through
+the system tap at the gaze point (unchanged path). A drag held with the controller follows its ray every frame; a
+pinch drag keeps the system-drag line (`DragLine`). Drill 2's "read the code" uses the eyes when tracked. The hint row
+says which input aims (`aim_controller` / `aim_eyes` / `aim_head`); `STATE` ends with `aimWith=`, the log has
+`AIM with=… ` on every change and `TRIGGER …` per press. Remaining `pose.forward` uses: panel placement (D9), the
+pinch-drag conversion of hand travel, logs, and the fallbacks above.
+
+Debug: `ray --ef x 0.6 --ef z 0.8 [--ei ms 60000]` (a controller ray from beside the head to that floor point in the
+source frame; `--es v off` clears) · `trigger` (one press) · `eyes --ei on 0|1` · `aimline`. Emulator 6.1: no
+controller (DEVICE_NOT_SUPPORTED); eye tracking works once the permission is granted (gaze ≈ the camera).
+
 ## v0.1.1 polish (2026-10-26, user feedback on the headset; taste profile D14 / D15)
 
 User: the Geiger was too loud and could not be muted; the lead shield landed on their face, could not be seen past
