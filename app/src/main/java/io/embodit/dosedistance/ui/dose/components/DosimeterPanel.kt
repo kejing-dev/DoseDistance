@@ -35,6 +35,7 @@ import com.pico.spatial.ui.design.Text
 import com.pico.spatial.ui.foundation.material.backgroundMaterial
 import com.pico.spatial.ui.platform.Material
 import io.embodit.dosedistance.R
+import io.embodit.dosedistance.domain.AimSource
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.Isotope
@@ -294,8 +295,10 @@ private fun ShieldPage(state: DoseUiState, onEvent: (DoseEvent) -> Unit) {
             }
         }
         Row(modifier = Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Icon(painter = painterResource(R.drawable.ic_rotate), contentDescription = null, modifier = Modifier.size(18.dp), tint = ink)
-            Text(text = rs(R.string.hint_rotate_drag), color = ink, style = DdType.label, maxLines = 1, softWrap = false, modifier = Modifier.probe("shield_hint"))
+            // while placing: how to aim with what is there (v0.1.2, taste profile D1); else the stick hint
+            val aiming = state.aiming == Aiming.SHIELD
+            Icon(painter = painterResource(if (aiming) R.drawable.ic_shield else R.drawable.ic_rotate), contentDescription = null, modifier = Modifier.size(18.dp), tint = ink)
+            Text(text = if (aiming) aimHint(state) else rs(R.string.hint_rotate_drag), color = ink, style = DdType.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.probe("shield_hint"))
         }
     }
 }
@@ -320,6 +323,18 @@ private fun ShieldRow(state: DoseUiState, sh: Shield, onEvent: (DoseEvent) -> Un
         Key(name = "shield_delete_${sh.id}", icon = R.drawable.ic_trash, description = rs(R.string.action_delete), enabled = state.ready && !state.drillRunning) { onEvent(DoseEvent.DeleteShield(sh.id)) }
     }
 }
+
+/** How to aim and confirm with the input there is now (controller ray + trigger, eyes + pinch, or the head as a fallback). */
+@Composable
+private fun aimHint(state: DoseUiState): String =
+    rs(
+        when (state.aimSource) {
+            AimSource.CONTROLLER -> R.string.aim_controller
+            AimSource.EYES -> R.string.aim_eyes
+            AimSource.HEAD -> R.string.aim_head
+            null -> R.string.aiming
+        }
+    )
 
 /** Drill list (design `tabs.drillIdle`): numbered dot · short name · [Start]. */
 @Composable
@@ -407,7 +422,7 @@ internal fun CompactPanel(state: DoseUiState?, onEvent: (DoseEvent) -> Unit) {
             }
             state.aiming == Aiming.SOURCE -> {
                 Icon(painter = painterResource(R.drawable.ic_source), contentDescription = null, modifier = Modifier.size(32.dp), tint = ink)
-                Text(text = rs(R.string.aiming), color = ink, style = DdType.body, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).probe("compact_text"))
+                Text(text = aimHint(state), color = ink, style = DdType.body, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).probe("compact_text"))
             }
             else -> {
                 Icon(painter = painterResource(R.drawable.ic_source), contentDescription = null, modifier = Modifier.size(32.dp), tint = ink)

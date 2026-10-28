@@ -19,6 +19,7 @@ import com.pico.spatial.ui.platform.LocalAudioEffectPlayer
 import com.pico.spatial.ui.platform.SpatialSoundEffect
 import com.pico.spatial.ui.platform.containers.LocalSpatialNavigator
 import io.embodit.dosedistance.platform.DdLog
+import io.embodit.dosedistance.platform.EyePermissionActivity
 import io.embodit.dosedistance.ui.dose.components.DoseStage
 import io.embodit.dosedistance.ui.dose.components.LocalDdResources
 import io.embodit.dosedistance.ui.dose.components.localizedResources
@@ -73,6 +74,9 @@ fun DoseScreen() {
     }
 
     LaunchedEffect(scene, state) { scene.render(state) }
+    // v0.1.2: eye gaze + pinch aims (taste profile D1); asked once, after the Stage is up
+    val ready = state.ready
+    LaunchedEffect(ready) { if (ready) EyePermissionActivity.askOnce(context.applicationContext) }
 
     val audio = LocalAudioEffectPlayer.current
     LaunchedEffect(viewModel) {

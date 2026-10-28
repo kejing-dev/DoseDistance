@@ -146,6 +146,19 @@ internal object DebugCommands {
             "heat" -> vm.onEvent(DoseEvent.HeatSet((i["on"] ?: 1) != 0))
             "snap" -> vm.onEvent(DoseEvent.SnapSet((i["on"] ?: 1) != 0))
             "fade" -> CmdOut.log("fade ${scene.fadedShieldIds()}")
+            // v0.1.2 aiming: `ray` x z [ms] (controller ray to a floor point in the source frame; v=off clears) ·
+            // `trigger` (one press) · `eyes` on=0|1 · `aimline`
+            "ray" -> {
+                val src = vm.state.value.source
+                val target = if (v == "off" || src == null) null else src.frame.floorPoint(f["x"] ?: 0.6f, f["z"] ?: 0f)
+                CmdOut.log(scene.debugRay(target, (i["ms"] ?: 60_000).toLong()))
+            }
+            "trigger" -> {
+                scene.debugTrigger()
+                CmdOut.log("trigger")
+            }
+            "eyes" -> CmdOut.log(scene.debugEyesOff((i["on"] ?: 1) == 0))
+            "aimline" -> DdLog.i(scene.aimLine())
             "select" -> if ((t["what"] ?: v) == "source") vm.onEvent(DoseEvent.SourceTapped) else vm.onEvent(DoseEvent.ShieldTapped(i["n"] ?: 1))
             "tap" -> vm.onEvent(DoseEvent.EmptyTapped)
             "ui" -> ui(vm, s ?: "")

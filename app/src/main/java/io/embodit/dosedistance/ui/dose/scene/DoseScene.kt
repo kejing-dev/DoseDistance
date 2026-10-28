@@ -18,6 +18,8 @@ import com.pico.spatial.ui.foundation.content.SpatialViewAttachments
 import com.pico.spatial.ui.foundation.gesture.SpatialDragValue
 import com.pico.spatial.ui.foundation.gesture.SpatialTapValue
 import com.pico.spatial.ui.geometry.Offset3D
+import io.embodit.dosedistance.domain.Aim
+import io.embodit.dosedistance.domain.AimSource
 import io.embodit.dosedistance.domain.Clearance
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.DragLine
@@ -27,6 +29,7 @@ import io.embodit.dosedistance.domain.HeadPose
 import io.embodit.dosedistance.domain.Heat
 import io.embodit.dosedistance.domain.P2
 import io.embodit.dosedistance.domain.PlaneSurface
+import io.embodit.dosedistance.domain.PointerRay
 import io.embodit.dosedistance.domain.Quat4
 import io.embodit.dosedistance.domain.Reading
 import io.embodit.dosedistance.domain.Rings
@@ -117,6 +120,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
     private val planes = DdGraph.planes
     private val head = DdGraph.head
     private val stick = DdGraph.stick
+    private val eyes = DdGraph.eyes
     private val geiger = DdGraph.geiger
 
     private var content: SpatialViewContent? = null
@@ -162,6 +166,11 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
     // the reading at the head, every frame
     private var judged: Vec3? = null
     private var judgedForward: Vec3 = Vec3.AHEAD
+
+    // what aims this frame (v0.1.2, taste profile D1): controller ray, eyes, or the head as the last fallback
+    private var aim: Pair<PointerRay, AimSource>? = null
+    private var eyeRay: PointerRay? = null
+    private var lastAimSource: AimSource? = null
     private var reading: Reading? = null
     private var doseAcc = 0f
     private var gazeMs = 0L
@@ -242,6 +251,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         for (id in PanelIds.plates) rig.world(id, PanelSizes.PLATE_W, PanelSizes.PLATE_H, PLATE_SCALE)
         head.start()
         stick.start()
+        eyes.start()
         ActiveScene.scene = this
         attached = true
         bindPanels(attachments)
@@ -325,6 +335,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         planes.stop()
         head.stop()
         stick.stop()
+        eyes.stop()
         geiger.stop()
         cancelLive()
         DdLog.i("SCENE paused")
@@ -335,6 +346,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         paused = false
         head.start()
         stick.start()
+        eyes.start()
         lastPlanesSent = -1
         startSensing()
         DdLog.i("SCENE resumed")
@@ -362,6 +374,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         planes.stop()
         head.stop()
         stick.stop()
+        eyes.stop()
         geiger.stop()
         panelShown.clear()
         runCatching { sourceView?.destroy() }
@@ -541,6 +554,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         pollTracking(now)
         if (built) {
             runMeshWork(now)
+            updateAim(now)
             stepStick(now, dt)
             if (drag != null || turn != null || liveSource != null || liveShield != null) placeViews()
             judge(now, dt)
@@ -623,7 +637,10 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             val r = Reading.at(state.isotope, src.core, h, effShields(), floorY)
             reading = r
             doseAcc += r.h * dt / 3600f
-            gazeMs = if (Drills.gazesAt(h, f, src.mouth)) gazeMs + (dt * 1000f).toLong() else 0L
+            // reading the code in the pot: the eye gaze when the eyes are tracked, else the head (design default)
+            val e = eyeRay?.takeIf { DdGraph.debugHead == null }
+            val looks = if (e != null) Drills.gazesAt(e.origin, e.dir, src.mouth) else Drills.gazesAt(h, f, src.mouth)
+            gazeMs = if (looks) gazeMs + (dt * 1000f).toLong() else 0L
         } else if (src == null) {
             reading = null
             gazeMs = 0L
@@ -633,7 +650,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         if (now - lastTickMs >= TICK_MS) {
             lastTickMs = now
             val heading = P2(f.x, f.z).takeIf { it.length > 0.1f }?.normalized() ?: if (hasHead) pose.level() else null
-            sink(DoseEvent.Tick(if (src != null) reading else null, doseAcc, judged, gazeMs, geiger.clicks.get(), now, heading))
+            sink(DoseEvent.Tick(if (src != null) reading else null, doseAcc, judged, gazeMs, geiger.clicks.get(), now, heading, aim?.second))
             doseAcc = 0f
         }
         if (now - lastGeigerMs >= GEIGER_MS) {
@@ -729,14 +746,50 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         if (ms > 8) DdLog.i("HEAT cells=${cells.size} ms=$ms")
     }
 
-    /** The head-gaze landing point on TABLE / FLOOR planes (the aiming ghost follows it). */
-    private fun gazeHit(): SurfaceHit? {
-        if (!hasHead) return null
+    /**
+     * Picks this frame's aiming ray (controller in use > eyes > head, [Aim.choose]) and turns a trigger press while
+     * aiming into a placement at the ghost's point (the eye + pinch path places through the system tap).
+     */
+    private fun updateAim(now: Long) {
+        eyeRay = eyes.ray(now)
+        aim = Aim.choose(stick.ray(now), stick.active(now), eyeRay, if (hasHead) pose else null)
+        val source = aim?.second
+        if (source != lastAimSource) {
+            lastAimSource = source
+            DdLog.i("AIM with=$source eyes=${eyes.status()} stick=${stick.status()}")
+        }
+        if (stick.takePress()) onTrigger()
+        // a drag held with the controller follows its ray every frame (system drag events may come sparsely)
+        drag?.takeIf { it.begun && source == AimSource.CONTROLLER }?.let { d -> d.dir?.let { moveDrag(d, it, now) } }
+    }
+
+    private fun onTrigger() {
+        val s = ui
+        if (!s.interactive || s.menuOpen || s.aiming == Aiming.NONE) return
+        val hit = aimHit(floorOnly = s.aiming == Aiming.SHIELD)
+        DdLog.i("TRIGGER aim=${s.aiming} with=${aim?.second} hit=${hit?.plane?.label} at=${DdLog.pos(hit?.point)}")
+        if (hit != null) sink(DoseEvent.PlaneTapped(hit))
+    }
+
+    /**
+     * Where the aiming ray lands on a TABLE / FLOOR plane (the ghost follows it, the trigger places there); with
+     * [floorOnly] the floor level itself counts where no floor plane was scanned. Never the head direction unless
+     * neither the controller nor the eyes are available ([AimSource.HEAD], the panel says so).
+     */
+    private fun aimHit(floorOnly: Boolean = false): SurfaceHit? {
+        val ray = aim?.first ?: return null
         var best: SurfaceHit? = null
         for (p in planes.all) {
             if (!p.isHorizontal) continue
-            val hit = p.hit(pose.position, pose.forward.normalized(), 8f) ?: continue
+            if (floorOnly && p.semantic != FLOOR) continue
+            val hit = p.hit(ray.origin, ray.dir, 8f) ?: continue
             if (best == null || hit.distance < best.distance) best = hit
+        }
+        if (best == null && floorOnly) {
+            val floor = floorPlane() ?: return null
+            val y = ui.floorY ?: return null
+            val at = Aim.onLevel(ray, y) ?: return null
+            best = SurfaceHit(at, Vec3.UP, ray.origin.distanceTo(at), floor)
         }
         return best
     }
@@ -748,7 +801,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         val src = effSource()
         // source ghost while aiming
         if (state.aiming == Aiming.SOURCE && state.interactive && !state.menuOpen) {
-            val hit = debugAimHit() ?: gazeHit()
+            val hit = debugAimHit() ?: aimHit()
             val ok = hit != null && (hit.plane.semantic == TABLE || hit.plane.semantic == FLOOR)
             val table = nearestTable(hit?.point ?: pose.position)
             val snapped = ok && table != null && hit!!.plane.id == table.id && P2(hit.point.x - table.centroid.x, hit.point.z - table.centroid.z).length <= SNAP_TABLE_M
@@ -761,7 +814,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         when {
             src == null -> a.hideShield()
             state.aiming == Aiming.SHIELD && state.interactive -> {
-                val p = DdGraph.debugAim?.let { (x, z) -> src.frame.floorPoint(x, z) } ?: gazeHit()?.takeIf { it.plane.semantic == FLOOR }?.point?.let { P2(it.x, it.z) }
+                val p = DdGraph.debugAim?.let { (x, z) -> src.frame.floorPoint(x, z) } ?: aimHit(floorOnly = true)?.point?.let { P2(it.x, it.z) }
                 if (p != null && snap == null) {
                     val at = shieldLanding(state, p)
                     val face = state.head?.let { Shield.faceTowards(at, P2(it.x, it.z)) } ?: Shield.faceTowards(at, src.foot)
@@ -861,6 +914,31 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         }
         awaitCommit = SystemClock.elapsedRealtime()
     }
+
+    /**
+     * Debug `ray`: a controller ray for [ms] from 20 cm right of / 35 cm below the head to floor point [target] (null
+     * clears); `trigger` presses it. Emulator QA of the controller path.
+     */
+    fun debugRay(target: P2?, ms: Long): String {
+        if (target == null || !hasHead) {
+            stick.debugAim(null, 0L)
+            return "ray off"
+        }
+        val y = ui.floorY ?: return "ray: no floor"
+        val origin = pose.position + pose.right * 0.2f - Vec3(0f, 0.35f, 0f)
+        val dir = (target.at(y) - origin).normalized()
+        stick.debugAim(PointerRay(origin, dir), ms)
+        return "ray from=${DdLog.pos(origin)} to=${target} ms=$ms"
+    }
+
+    fun debugTrigger() = stick.debugPress()
+
+    fun debugEyesOff(off: Boolean): String {
+        eyes.forceOff = off
+        return "eyes off=$off ${eyes.status()}"
+    }
+
+    fun aimLine(): String = "AIM with=${aim?.second} origin=${DdLog.pos(aim?.first?.origin)} dir=${DdLog.pos(aim?.first?.dir)} eyes=${eyes.status()} stick=${stick.status()} active=${stick.active(SystemClock.elapsedRealtime())}"
 
     /** Debug `stick`: the stick reads [x] for [ms]. */
     fun debugStick(x: Float, ms: Long): String {
@@ -1117,7 +1195,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
         when (val w = d.what) {
             DragWhat.Source -> {
                 val src = liveSource ?: state.source ?: return
-                val p = DragLine.onLevel(pose.position, line, src.planeY + 0.07f) ?: return
+                val p = levelPoint(line, src.planeY + 0.07f) ?: return
                 val table = src.planeId?.let { id -> state.tables.firstOrNull { it.id == id } }
                 var at = Vec3(p.x, src.planeY, p.z)
                 var snapped = false
@@ -1134,7 +1212,7 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
             }
             is DragWhat.ShieldOf -> {
                 val s = liveShield?.takeIf { it.id == w.id } ?: state.shields.firstOrNull { it.id == w.id } ?: return
-                val p = DragLine.onLevel(pose.position, line, floorY + 0.93f) ?: return
+                val p = levelPoint(line, floorY + 0.93f) ?: return
                 val snap = shieldSnapPoint(state)
                 val src = state.source
                 val dist = snap?.let { (p - it).length } ?: Float.MAX_VALUE
@@ -1149,6 +1227,16 @@ class DoseScene(private val sink: (DoseEvent) -> Unit) {
                     else shieldLanding(state, p).let { q -> s.copy(x = q.x, z = q.z) }
             }
         }
+    }
+
+    /**
+     * Where the dragged piece goes on the level [y]: along the controller ray itself while the controller aims; for a
+     * pinch drag (eyes + hand) along the system-drag pointing line (Spatial Ruler's model, [DragLine]).
+     */
+    private fun levelPoint(line: Vec3, y: Float): P2? {
+        val ctl = aim?.takeIf { it.second == AimSource.CONTROLLER }?.first
+        if (ctl != null) return Aim.onLevel(ctl, y)?.let { P2(it.x, it.z) }
+        return DragLine.onLevel(pose.position, line, y)
     }
 
     private fun endDrag(cancelled: Boolean, d: Drag? = null) {

@@ -113,4 +113,7 @@
     <string name="action_to_front">Bring in front of me</string>
     <string name="action_hide">Hide</string>
     <string name="action_show">Show</string>
+    <string name="aim_controller">Point the controller at the spot, pull the trigger</string>
+    <string name="aim_eyes">Look at the spot, pinch to place</string>
+    <string name="aim_head">No controller or eye tracking: aim with your head, pinch</string>
 </resources>

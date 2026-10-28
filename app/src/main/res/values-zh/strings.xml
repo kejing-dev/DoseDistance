@@ -113,4 +113,7 @@
     <string name="action_to_front">移到面前</string>
     <string name="action_hide">隐藏</string>
     <string name="action_show">显示</string>
+    <string name="aim_controller">手柄射线指着落点，扣扳机放下</string>
+    <string name="aim_eyes">看着落点，捏合手指放下</string>
+    <string name="aim_head">没有手柄和眼动：转头对准，捏合放下</string>
 </resources>

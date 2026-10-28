@@ -171,7 +171,7 @@ class DoseViewModel(
         val dt = if (lastTickMs < 0) 0L else (e.nowMs - lastTickMs).coerceIn(0L, 500L)
         lastTickMs = e.nowMs
         if (s.trackingLost) {
-            update { it.copy(head = e.head ?: it.head, heading = e.heading ?: it.heading) }
+            update { it.copy(head = e.head ?: it.head, heading = e.heading ?: it.heading, aimSource = e.aimSource ?: it.aimSource) }
             return
         }
         val dose = if (e.reading != null) e.dDose else 0f
@@ -179,7 +179,7 @@ class DoseViewModel(
         if (drill != null && drill.running && e.reading != null && s.source != null) drill = stepDrill(drill, s, e, dt, dose)
         val passedNow = drill?.phase == DrillPhase.PASSED && s.drill?.phase == DrillPhase.RUNNING
         val failedNow = drill?.phase == DrillPhase.FAILED && s.drill?.phase == DrillPhase.RUNNING
-        update { it.copy(reading = e.reading, cumulative = it.cumulative + dose, head = e.head ?: it.head, heading = e.heading ?: it.heading, clicks = e.clicks, drill = drill) }
+        update { it.copy(reading = e.reading, cumulative = it.cumulative + dose, head = e.head ?: it.head, heading = e.heading ?: it.heading, aimSource = e.aimSource ?: it.aimSource, clicks = e.clicks, drill = drill) }
         if (passedNow) {
             DdLog.i("DRILL pass kind=${drill!!.kind.tag} s=${drill.elapsedMs / 1000} cum=${fmt(drill.cum)} h=${fmt(drill.resultH)} a=${fmt(drill.resultA)}")
             _effects.tryEmit(DoseEffect.Feedback("snap"))
@@ -573,7 +573,7 @@ class DoseViewModel(
         val d = s.drill
         return "STATE ${s.designState} iso=${s.isotope.tag} H=${r?.let { fmt(it.h) } ?: "-"} show=${r?.let { Dose.rateText(it.h) } ?: "-"} zone=${r?.zone ?: "-"} d=${r?.let { fmt(it.d) } ?: "-"} A=${r?.let { fmt(it.attenuation) } ?: "-"} blocked=${r?.takeIf { it.shielded }?.let { Dose.blockedText(it.attenuation) } ?: "-"} cum=${fmt(s.cumulative)} " +
             "head=${local?.let { "(${fmt(it.x)},${fmt(it.y)},${fmt(it.z)})" } ?: "-"} source=${src?.let { "${it.surface}(${fmt(it.x)},${fmt(it.planeY)},${fmt(it.z)})" } ?: "-"} shields=[$shields] sel=${if (s.selectedSource) "source" else s.selectedShield?.let { "shield$it" } ?: "-"} " +
-            "aim=${s.aiming} tab=${s.tab} drill=${d?.let { "${it.kind.tag}:${it.phase} cum=${fmt(it.cum)} hStart=${fmt(it.hStart)} target=${fmt(it.target)} code=${it.code} read=${it.read} inSpot=${it.inSpot}" } ?: "-"} lost=${s.trackingLost} menu=${s.menuOpen} snack=${s.snack?.kind ?: "-"} coach=${s.coach} lang=${s.settings.language.tag} sound=${s.settings.geiger} heat=${s.settings.heat} snap=${s.settings.snap}"
+            "aim=${s.aiming} tab=${s.tab} drill=${d?.let { "${it.kind.tag}:${it.phase} cum=${fmt(it.cum)} hStart=${fmt(it.hStart)} target=${fmt(it.target)} code=${it.code} read=${it.read} inSpot=${it.inSpot}" } ?: "-"} lost=${s.trackingLost} menu=${s.menuOpen} snack=${s.snack?.kind ?: "-"} coach=${s.coach} lang=${s.settings.language.tag} sound=${s.settings.geiger} heat=${s.settings.heat} snap=${s.settings.snap} aimWith=${s.aimSource ?: "-"}"
     }
 
     /** Debug: change the state directly. */

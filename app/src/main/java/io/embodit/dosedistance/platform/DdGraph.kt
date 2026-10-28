@@ -4,6 +4,7 @@ import io.embodit.dosedistance.domain.Vec3
 import io.embodit.dosedistance.platform.audio.Geiger
 import io.embodit.dosedistance.platform.sense.PlaneTracker
 import io.embodit.dosedistance.platform.tracking.ControllerStick
+import io.embodit.dosedistance.platform.tracking.EyeTracker
 import io.embodit.dosedistance.platform.tracking.HeadTracker
 
 /**
@@ -14,6 +15,7 @@ object DdGraph {
     val planes = PlaneTracker()
     val head = HeadTracker()
     val stick = ControllerStick()
+    val eyes = EyeTracker()
     val geiger = Geiger()
 
     /**

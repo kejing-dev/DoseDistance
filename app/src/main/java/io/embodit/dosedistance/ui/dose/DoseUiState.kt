@@ -1,5 +1,6 @@
 package io.embodit.dosedistance.ui.dose
 
+import io.embodit.dosedistance.domain.AimSource
 import io.embodit.dosedistance.domain.Clearance
 import io.embodit.dosedistance.domain.Dose
 import io.embodit.dosedistance.domain.Isotope
@@ -126,6 +127,8 @@ data class DoseUiState(
     val head: Vec3? = null,
     /** The head's level heading (for "bring to front", taste profile D9). */
     val heading: P2? = null,
+    /** What aims now (v0.1.2, taste profile D1): controller ray, eyes, or the head as the last fallback. */
+    val aimSource: AimSource? = null,
 ) {
     val isotope: Isotope
         get() = settings.isotope
@@ -218,7 +221,7 @@ sealed interface DoseEvent {
     data class BlockChanged(val reason: String?) : DoseEvent
 
     /** 10 Hz from the frame system: the reading at the (judged) head, the dose integrated since the last tick, the gaze time on the pot. */
-    data class Tick(val reading: Reading?, val dDose: Float, val head: Vec3?, val gazeMs: Long, val clicks: Long, val nowMs: Long, val heading: P2? = null) : DoseEvent
+    data class Tick(val reading: Reading?, val dDose: Float, val head: Vec3?, val gazeMs: Long, val clicks: Long, val nowMs: Long, val heading: P2? = null, val aimSource: AimSource? = null) : DoseEvent
 
     data class PlaneTapped(val hit: SurfaceHit) : DoseEvent
 

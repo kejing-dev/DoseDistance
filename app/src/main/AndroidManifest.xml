@@ -3,7 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- No network, no camera: plane detection and the head pose need no runtime permission on the
-         emulator (design container.permissions; device to be confirmed, the blocked dialog covers it). -->
+         emulator (design container.permissions; device to be confirmed, the blocked dialog covers it).
+         v0.1.2: eye gaze + pinch places the source and the shields (taste profile D1), asked once. -->
+    <uses-permission android:name="com.picovr.permission.EYE_TRACKING" />
 
     <application
         android:name=".platform.SpatialApplication"
@@ -42,6 +44,11 @@
                 android:name="pico.spatial.stage.immersion_max"
                 android:value="0" />
         </activity>
+
+        <activity
+            android:name=".platform.EyePermissionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DoseDistance" />
 
         <meta-data android:name="icon.3d.list" android:resource="@array/icon_3d_list" />
         <meta-data android:name="icon.sdf.list" android:resource="@array/icon_sdf_list" />
